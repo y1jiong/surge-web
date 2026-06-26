@@ -56,6 +56,23 @@ docker compose up -d
 
 Starts both Surge (headless server) and Surge Web. Downloads land in `./downloads`, Surge state in `./surge-config`.
 
+#### HTTPS via built-in TLS
+
+Put your certificate and key in a `./certs` directory, then add to `docker-compose.yml`:
+
+```yaml
+# surge-web service
+volumes:
+  - ./certs:/certs:ro
+command: ["--tls-cert", "/certs/cert.pem", "--tls-key", "/certs/key.pem", "--port", "443"]
+ports:
+  - "443:443"
+```
+
+#### HTTPS via reverse proxy
+
+Alternatively, put a reverse proxy (Caddy, nginx, Traefik) in front of surge-web — no extra flags needed, just proxy to `surge-web:1799`.
+
 ### System Service
 
 ```bash
