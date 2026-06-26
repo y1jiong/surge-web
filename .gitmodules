@@ -1,0 +1,3 @@
+[submodule "ref/Surge"]
+	path = ref/Surge
+	url = https://github.com/SurgeDM/Surge.git
