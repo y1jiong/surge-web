@@ -7,7 +7,7 @@
 [![Go Version](https://img.shields.io/github/go-mod/go-version/y1jiong/surge-web?style=flat-square&color=cyan)](go.mod)
 [![License](https://img.shields.io/badge/License-Apache%202.0-grey.svg?style=flat-square)](LICENSE)
 
-[Installation](#installation) • [Usage](#usage) • [Building](#building)
+[Installation](#installation) • [Usage](#usage) • [Docker Compose](#docker-compose) • [Building](#building)
 
 </div>
 
@@ -30,10 +30,8 @@ It acts as a **lightweight proxy** between your browser and Surge's HTTP API, wi
 - **Global rate limit** — set bandwidth limits directly from the web UI
 - **Single binary** — frontend embedded with Go's `embed`, no external assets needed
 - **Dark theme** — GitHub-style color scheme, clean and minimal
-
----
-
 - **System service** — install as a daemon via `surge-web service install`
+- **Docker Compose** — one-command deployment with Surge and Surge Web
 
 ## Installation
 
@@ -48,6 +46,15 @@ go install github.com/y1jiong/surge-web@latest
 ```
 
 Requires Go 1.25+.
+
+### Docker Compose
+
+```bash
+curl -O https://raw.githubusercontent.com/y1jiong/surge-web/main/docker-compose.yml
+docker compose up -d
+```
+
+Starts both Surge (headless server) and Surge Web. Downloads land in `./downloads`, Surge state in `./surge-config`.
 
 ### System Service
 

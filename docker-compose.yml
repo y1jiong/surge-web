@@ -1,0 +1,53 @@
+services:
+  init-dirs:
+    image: ghcr.io/surgedm/surge
+    user: "0:0"
+    entrypoint: ["sh", "-c", "mkdir -p /downloads /var/lib/surge && chown ${UID:-1000}:${GID:-1000} /downloads /var/lib/surge"]
+    volumes:
+      - ./downloads:/downloads
+      - ./surge-config:/var/lib/surge
+
+  surge:
+    image: ghcr.io/surgedm/surge
+    container_name: surge
+    user: "${UID:-1000}:${GID:-1000}"
+    # Uncomment to expose Surge API to host (optional, surge-web connects via internal network)
+    # ports:
+    #   - "127.0.0.1:1700:1700"
+    volumes:
+      - ./downloads:/downloads
+      - ./surge-config:/var/lib/surge
+    restart: unless-stopped
+    environment:
+      - TZ=UTC
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      init-dirs:
+        condition: service_completed_successfully
+
+  surge-web:
+    image: ghcr.io/y1jiong/surge-web:latest
+    container_name: surge-web
+    user: "${UID:-1000}:${GID:-1000}"
+    ports:
+      - "1799:1799"
+    volumes:
+      - ./downloads:/downloads
+      - ./surge-config:/var/lib/surge:ro # Read-only for token file
+    restart: unless-stopped
+    environment:
+      - SURGE_HOST=surge
+      - SURGE_PORT=1700
+      - TZ=UTC
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      surge:
+        condition: service_started
