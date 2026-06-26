@@ -18,6 +18,7 @@ import (
 	flag "github.com/spf13/pflag"
 
 	"surge-web/internal/handler"
+	iservice "surge-web/internal/service"
 	"surge-web/internal/surge"
 )
 
@@ -34,6 +35,9 @@ var (
 )
 
 func main() {
+	svc, _ := iservice.New("surge-web", "Surge Web Dashboard",
+		"Web-based dashboard for the Surge download manager.", nil, runServer)
+
 	if len(os.Args) > 1 && os.Args[1] == "service" {
 		if len(os.Args) < 3 {
 			fmt.Fprintf(os.Stderr, "usage: surge-web service install [flags...]\n"+
@@ -42,17 +46,19 @@ func main() {
 		}
 		action := os.Args[2]
 		if action == "install" {
-			// Capture remaining args as service startup flags
-			setServiceArgs(os.Args[3:])
+			// Recreate with captured args as service startup flags
+			svc, _ = iservice.New("surge-web", "Surge Web Dashboard",
+				"Web-based dashboard for the Surge download manager.",
+				os.Args[3:], runServer)
 		}
-		runServiceCommand(action)
+		iservice.RunCommand(svc, action)
 		return
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "run" {
 		// When started by the service manager, parse flags then run server
 		parseFlags()
-		runAsService()
+		iservice.Run(svc)
 		return
 	}
 

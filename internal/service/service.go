@@ -1,4 +1,4 @@
-package main
+package service
 
 import (
 	"context"
@@ -8,20 +8,10 @@ import (
 	"github.com/kardianos/service"
 )
 
-var serviceConfig = &service.Config{
-	Name:        "surge-web",
-	DisplayName: "Surge Web Dashboard",
-	Description: "Web-based dashboard for the Surge download manager.",
-	Arguments:   []string{"run"},
-}
-
-func setServiceArgs(args []string) {
-	serviceConfig.Arguments = append([]string{"run"}, args...)
-}
-
 type program struct {
-	exit   chan struct{}
-	cancel context.CancelFunc
+	exit    chan struct{}
+	cancel  context.CancelFunc
+	runFunc func()
 }
 
 func (p *program) Start(s service.Service) error {
@@ -31,10 +21,7 @@ func (p *program) Start(s service.Service) error {
 
 	go func() {
 		defer close(p.exit)
-		// Replay main with the original arguments passed to the binary,
-		// minus the service runner wrapper. The service manager has
-		// already set up working directory, env, etc.
-		runServer()
+		p.runFunc()
 	}()
 
 	return nil
@@ -50,17 +37,20 @@ func (p *program) Stop(s service.Service) error {
 	return nil
 }
 
-func getService() (service.Service, error) {
-	return service.New(&program{}, serviceConfig)
+// New creates a service configured to run the given function.
+// extraArgs are appended to the binary's command line when the service manager starts it.
+func New(name, displayName, description string, extraArgs []string, runFunc func()) (service.Service, error) {
+	cfg := &service.Config{
+		Name:        name,
+		DisplayName: displayName,
+		Description: description,
+		Arguments:   append([]string{"run"}, extraArgs...),
+	}
+	return service.New(&program{runFunc: runFunc}, cfg)
 }
 
-func runServiceCommand(action string) {
-	s, err := getService()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "service error: %v\n", err)
-		os.Exit(1)
-	}
-
+// RunCommand executes a service management action (install, uninstall, start, stop, status).
+func RunCommand(s service.Service, action string) {
 	var svcErr error
 	switch action {
 	case "install":
@@ -100,12 +90,8 @@ func runServiceCommand(action string) {
 	}
 }
 
-func runAsService() {
-	s, err := getService()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create service: %v\n", err)
-		os.Exit(1)
-	}
+// Run starts the service in daemon mode (called by the service manager).
+func Run(s service.Service) {
 	if err := s.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "service run failed: %v\n", err)
 		os.Exit(1)
