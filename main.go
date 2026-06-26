@@ -4,7 +4,6 @@ import (
 	"context"
 	"embed"
 	"errors"
-	"flag"
 	"fmt"
 	"io/fs"
 	"log"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	flag "github.com/spf13/pflag"
 
 	"surge-web/internal/handler"
 	"surge-web/internal/surge"
@@ -30,10 +31,10 @@ func main() {
 		surgePort  int
 		surgeToken string
 	)
-	flag.IntVar(&port, "port", 8080, "listen port for the web UI")
-	flag.StringVar(&surgeHost, "surge-host", "", "surge server address (default: auto-detect)")
-	flag.IntVar(&surgePort, "surge-port", 0, "surge server port (default: auto-detect)")
-	flag.StringVar(&surgeToken, "token", "", "surge API token (default: auto-detect)")
+	flag.IntVarP(&port, "port", "p", 8080, "listen port for the web UI")
+	flag.StringVarP(&surgeHost, "surge-host", "H", "", "surge server address (default: auto-detect)")
+	flag.IntVarP(&surgePort, "surge-port", "P", 0, "surge server port (default: auto-detect)")
+	flag.StringVarP(&surgeToken, "token", "t", "", "surge API token (default: auto-detect)")
 	flag.Parse()
 
 	logger := log.New(os.Stderr, "[surge-web] ", log.LstdFlags)
