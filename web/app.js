@@ -89,19 +89,35 @@ function fmtETA(sec) {
 
 function toast(msg, type) {
   type = type || '';
+  var timer = null;
   const el = document.createElement('div');
   el.className = 'toast ' + type;
   el.textContent = msg;
   document.body.appendChild(el);
-  setTimeout(function() { el.remove(); }, 3000);
+
+  function startTimer() {
+    timer = setTimeout(function() { el.remove(); }, 3000);
+  }
+  el.addEventListener('mouseenter', function() { clearTimeout(timer); });
+  el.addEventListener('mouseleave', startTimer);
+  startTimer();
 }
 
 function api(method, path, body) {
   const opts = { method: method, headers: { 'Content-Type': 'application/json' } };
   if (body) opts.body = JSON.stringify(body);
   return fetch(API + path, opts).then(function(r) {
-    if (!r.ok) return r.text().then(function(t) { throw new Error(t || r.statusText); });
-    return r.json().catch(function() { return {}; });
+    return r.text().then(function(t) {
+      var data;
+      try { data = JSON.parse(t); } catch (_) {}
+      if (!r.ok) {
+        throw new Error((data && data.message) || t || r.statusText);
+      }
+      if (data && data.status === 'error') {
+        throw new Error(data.message || 'unknown error');
+      }
+      return data || {};
+    });
   });
 }
 
