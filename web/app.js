@@ -123,8 +123,23 @@ function api(method, path, body) {
 
 function loadList() {
   return api('GET', '/list').then(function(data) {
-    if (!Array.isArray(data)) return;
-    data.forEach(function(d) { downloads[d.id] = d; });
+    if (Array.isArray(data)) {
+      data.forEach(function(d) { downloads[d.id] = d; });
+    }
+    return api('GET', '/history');
+  }).then(function(data) {
+    if (Array.isArray(data)) {
+      data.forEach(function(d) {
+        if (!downloads[d.id]) {
+          d.progress = d.status === 'completed' ? 100 : 0;
+          d.speed = 0;
+          d.eta = 0;
+          d.connections = 0;
+          d.error = '';
+          downloads[d.id] = d;
+        }
+      });
+    }
     render();
   }).catch(function() {});
 }
