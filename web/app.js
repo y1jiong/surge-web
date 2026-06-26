@@ -88,6 +88,35 @@ function fmtETA(sec) {
   return Math.floor(sec/3600) + 'h ' + Math.floor((sec%3600)/60) + 'm';
 }
 
+function copyToClipboard(text, label) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      toast('Copied ' + label, 'success');
+    }).catch(function() {
+      legacyCopy(text, label);
+    });
+  } else {
+    legacyCopy(text, label);
+  }
+}
+
+function legacyCopy(text, label) {
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+    toast('Copied ' + label, 'success');
+  } catch (_) {
+    ta.select();
+    toast('Copy blocked — text selected, press Ctrl+C', 'error');
+  }
+  document.body.removeChild(ta);
+}
+
 function toast(msg, type) {
   type = type || '';
   var timer = null;
@@ -401,14 +430,10 @@ tbody.addEventListener('click', function(e) {
     if (e.target.closest('.copy-url')) {
       var url = cell.dataset.url;
       if (url) {
-        navigator.clipboard.writeText(url).then(function() {
-          toast('Copied URL', 'success');
-        }).catch(function() {});
+        copyToClipboard(url, 'URL');
       }
     } else if (cell.dataset.filename) {
-      navigator.clipboard.writeText(cell.dataset.filename).then(function() {
-        toast('Copied: ' + cell.dataset.filename, 'success');
-      }).catch(function() {});
+      copyToClipboard(cell.dataset.filename, 'filename');
     }
     return;
   }

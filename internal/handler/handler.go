@@ -315,6 +315,8 @@ func (p *Proxy) encryptAndStream(w http.ResponseWriter, r *http.Request, destPat
 	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+url.QueryEscape(encFilename))
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
+	flusher, canFlush := w.(http.Flusher)
+
 	w.WriteHeader(http.StatusOK)
 
 	w.Write([]byte("SENC"))
@@ -333,9 +335,13 @@ func (p *Proxy) encryptAndStream(w http.ResponseWriter, r *http.Request, destPat
 	for {
 		n, readErr := f.Read(buf)
 		if n > 0 {
-			encChunk := make([]byte, n)
-			ctr.XORKeyStream(encChunk, buf[:n])
-			w.Write(encChunk)
+			ctr.XORKeyStream(buf[:n], buf[:n])
+			if _, werr := w.Write(buf[:n]); werr != nil {
+				break
+			}
+			if canFlush {
+				flusher.Flush()
+			}
 		}
 		if readErr != nil {
 			break

@@ -140,8 +140,3 @@ func (c *Client) GetStatus(ctx context.Context, id string) (*DownloadStatus, err
 	}
 	return &status, nil
 }
-
-
-
-
-
