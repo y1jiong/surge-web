@@ -30,11 +30,15 @@ func main() {
 		surgeHost  string
 		surgePort  int
 		surgeToken string
+		tlsCert    string
+		tlsKey     string
 	)
 	flag.IntVarP(&port, "port", "p", 1799, "listen port for the web UI")
 	flag.StringVarP(&surgeHost, "surge-host", "H", "", "surge server address (default: auto-detect)")
 	flag.IntVarP(&surgePort, "surge-port", "P", 0, "surge server port (default: auto-detect)")
 	flag.StringVarP(&surgeToken, "token", "t", "", "surge API token (default: auto-detect)")
+	flag.StringVar(&tlsCert, "tls-cert", "", "TLS certificate file (enables HTTPS)")
+	flag.StringVar(&tlsKey, "tls-key", "", "TLS private key file (enables HTTPS)")
 	flag.Parse()
 
 	logger := log.New(os.Stderr, "[surge-web] ", log.LstdFlags)
@@ -69,7 +73,12 @@ func main() {
 		logger.Fatalf("failed to listen on :%d: %v", port, err)
 	}
 
-	logger.Printf("web UI available at http://localhost:%d", port)
+	useTLS := tlsCert != "" && tlsKey != ""
+	scheme := "http"
+	if useTLS {
+		scheme = "https"
+	}
+	logger.Printf("web UI available at %s://localhost:%d", scheme, port)
 
 	go func() {
 		sigCh := make(chan os.Signal, 1)
@@ -81,8 +90,14 @@ func main() {
 		srv.Shutdown(ctx)
 	}()
 
-	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		logger.Fatalf("server error: %v", err)
+	if useTLS {
+		if err := srv.ServeTLS(ln, tlsCert, tlsKey); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Fatalf("server error: %v", err)
+		}
+	} else {
+		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Fatalf("server error: %v", err)
+		}
 	}
 	logger.Println("server stopped")
 }

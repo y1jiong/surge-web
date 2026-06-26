@@ -58,11 +58,11 @@ surge-web
 # Connect to a specific Surge instance
 surge-web --surge-host 192.168.1.100 --surge-port 1700 --token <token>
 
-# Custom port
-surge-web -p 9090
+# Custom port with HTTPS
+surge-web -p 9090 --tls-cert cert.pem --tls-key key.pem
 ```
 
-Then open `http://localhost:1799` in your browser.
+Then open `http://localhost:1799` in your browser (or `https://` if TLS is enabled).
 
 ### Flags
 
@@ -72,6 +72,8 @@ Then open `http://localhost:1799` in your browser.
 | `--surge-host` | `-H` | auto-detect | Surge server address |
 | `--surge-port` | `-P` | auto-detect | Surge server port |
 | `--token` | `-t` | auto-detect | Surge API token |
+| `--tls-cert` | — | — | TLS certificate file (enables HTTPS) |
+| `--tls-key` | — | — | TLS private key file (enables HTTPS) |
 
 Authentication tokens are auto-discovered from `$XDG_STATE_HOME/surge/token` or the `SURGE_TOKEN` environment variable.
 
