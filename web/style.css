@@ -197,11 +197,14 @@ th {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: .5px;
+  border-bottom: 1px solid var(--border);
 }
 td {
   padding: 12px 8px;
-  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  border: none;
 }
+tbody tr { border-bottom: 1px solid var(--border); }
 td:first-child { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .progress-cell { min-width: 140px; }
@@ -234,6 +237,7 @@ td:first-child { max-width: 260px; overflow: hidden; text-overflow: ellipsis; wh
 .actions {
   display: flex;
   gap: 4px;
+  align-items: center;
 }
 .actions button {
   padding: 4px 10px;
