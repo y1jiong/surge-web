@@ -10,6 +10,7 @@ let sseSource = null;
 let connected = false;
 let sseConnecting = false;
 let renderPending = false;
+let lastStructKey = '';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -288,6 +289,7 @@ function doRender() {
   if (ids.length === 0) {
     table.style.display = 'none';
     empty.style.display = '';
+    lastStructKey = '';
     return;
   }
   table.style.display = '';
@@ -304,10 +306,27 @@ function doRender() {
     return sa.filename && sb.filename ? sa.filename.localeCompare(sb.filename) : 0;
   });
 
-  tbody.innerHTML = ids.map(function(id) {
-    var d = downloads[id];
-    return rowHTML(id, d);
-  }).join('');
+  var key = ids.map(function(id) { return id + ':' + downloads[id].status; }).join('|');
+  if (key !== lastStructKey) {
+    lastStructKey = key;
+    tbody.innerHTML = ids.map(function(id) {
+      return rowHTML(id, downloads[id]);
+    }).join('');
+  } else {
+    ids.forEach(function(id) {
+      var d = downloads[id];
+      var row = document.querySelector('tr[data-id="' + CSS.escape(id) + '"]');
+      if (!row) return;
+      var fill = row.querySelector('.progress-fill');
+      if (fill) fill.style.width = Math.min(100, d.progress || 0) + '%';
+      var text = row.querySelector('.progress-text');
+      if (text) text.textContent = d.status === 'downloading' ? (d.progress || 0).toFixed(1) + '%' : '';
+      var speed = row.querySelector('.speed');
+      if (speed) speed.textContent = d.speed > 0 ? fmtSpeed(d.speed) : '\u2014';
+      var eta = row.querySelector('.eta');
+      if (eta) eta.textContent = d.eta > 0 ? fmtETA(d.eta) : '\u2014';
+    });
+  }
 }
 
 function rowHTML(id, d) {
@@ -344,7 +363,7 @@ function rowHTML(id, d) {
     actions += '<button class="danger" data-action="delete" data-id="' + escId + '">Cancel</button>';
   }
 
-  return '<tr>' +
+  return '<tr data-id="' + escId + '">' +
     '<td title="' + esc(d.url || '') + '">' + esc(d.filename || escId) + '</td>' +
     '<td class="size">' + fmtBytes(d.total_size) + '</td>' +
     '<td class="progress-cell">' +
