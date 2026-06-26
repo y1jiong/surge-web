@@ -205,16 +205,26 @@ td {
   border: none;
 }
 tbody tr { border-bottom: 1px solid var(--border); }
-td:first-child { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.filename-cell { cursor: pointer; }
+.filename-cell { cursor: pointer; max-width: 260px; }
 .filename-cell:hover { color: var(--accent); }
+.filename-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
 .copy-url {
   cursor: pointer;
   display: inline-block;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 0 4px;
-  margin-left: 4px;
+  flex-shrink: 0;
   font-size: 10px;
   line-height: 16px;
   color: var(--text-muted);
