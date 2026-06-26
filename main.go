@@ -35,8 +35,12 @@ var (
 )
 
 func main() {
-	svc, _ := iservice.New("surge-web", "Surge Web Dashboard",
+	svc, err := iservice.New("surge-web", "Surge Web Dashboard",
 		"Web-based dashboard for the Surge download manager.", nil, runServer)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create service: %v\n", err)
+		os.Exit(1)
+	}
 
 	if len(os.Args) > 1 && os.Args[1] == "service" {
 		if len(os.Args) < 3 {
@@ -47,9 +51,14 @@ func main() {
 		action := os.Args[2]
 		if action == "install" {
 			// Recreate with captured args as service startup flags
-			svc, _ = iservice.New("surge-web", "Surge Web Dashboard",
+			var svcErr error
+			svc, svcErr = iservice.New("surge-web", "Surge Web Dashboard",
 				"Web-based dashboard for the Surge download manager.",
 				os.Args[3:], runServer)
+			if svcErr != nil {
+				fmt.Fprintf(os.Stderr, "failed to create service: %v\n", svcErr)
+				os.Exit(1)
+			}
 		}
 		iservice.RunCommand(svc, action)
 		return
