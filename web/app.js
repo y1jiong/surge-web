@@ -368,7 +368,8 @@ tbody.addEventListener('click', function(e) {
       }).catch(function(err) { toast('Resume failed: ' + err.message, 'error'); });
       break;
     case 'delete':
-      api('POST', '/delete?id=' + encodeURIComponent(id)).then(function() {
+      var purge = confirm('Delete downloaded file as well?');
+      api('POST', (purge ? '/purge' : '/delete') + '?id=' + encodeURIComponent(id)).then(function() {
         delete downloads[id];
         render();
       }).catch(function(err) { toast('Delete failed: ' + err.message, 'error'); });
