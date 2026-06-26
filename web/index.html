@@ -19,9 +19,13 @@
   <section id="add-section">
     <form id="add-form">
       <input type="url" id="add-url" placeholder="Paste download URL here..." required autocomplete="off">
-      <input type="text" id="add-filename" placeholder="Filename (optional)" autocomplete="off">
       <button type="submit">Add</button>
     </form>
+    <button id="btn-toggle-advanced" class="toggle-btn">+ Advanced</button>
+    <div id="advanced-area" style="display:none">
+      <input type="text" id="add-filename" placeholder="Filename (optional)" autocomplete="off">
+      <textarea id="add-headers" rows="5" placeholder="Custom headers (one per line)&#10;Cookie: session=abc123&#10;Authorization: Bearer token"></textarea>
+    </div>
   </section>
 
   <section id="actions-bar">

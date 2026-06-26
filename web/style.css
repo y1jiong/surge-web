@@ -85,7 +85,6 @@ header h1 {
   border-color: var(--accent);
 }
 #add-url { flex: 3; }
-#add-filename { flex: 1; }
 #add-form button {
   padding: 10px 24px;
   background: var(--accent);
@@ -98,6 +97,46 @@ header h1 {
   transition: background .2s;
 }
 #add-form button:hover { background: var(--accent-hover); }
+
+#advanced-area {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+#add-filename {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+#add-filename:focus { border-color: var(--accent); }
+#add-headers {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: monospace;
+  outline: none;
+  resize: vertical;
+}
+#add-headers:focus { border-color: var(--accent); }
+.toggle-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 0;
+  margin-top: 4px;
+}
+.toggle-btn:hover { color: var(--accent); }
 
 #actions-bar {
   display: flex;

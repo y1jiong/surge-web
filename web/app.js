@@ -19,6 +19,9 @@ const statusText = $('#conn-text');
 const addForm = $('#add-form');
 const addUrl = $('#add-url');
 const addFilename = $('#add-filename');
+const addHeaders = $('#add-headers');
+const advancedArea = $('#advanced-area');
+const btnToggleAdvanced = $('#btn-toggle-advanced');
 const tbody = $('#download-tbody');
 const table = $('#download-table');
 const empty = $('#list-empty');
@@ -360,6 +363,32 @@ tbody.addEventListener('click', function(e) {
   }
 });
 
+function parseHeaders(text) {
+  var headers = {};
+  if (!text) return headers;
+  text.split('\n').forEach(function(line) {
+    var idx = line.indexOf(':');
+    if (idx > 0) {
+      var key = line.substring(0, idx).trim();
+      var val = line.substring(idx + 1).trim();
+      if (key && val) headers[key] = val;
+    }
+  });
+  return headers;
+}
+
+btnToggleAdvanced.addEventListener('click', function() {
+  if (advancedArea.style.display === 'none') {
+    advancedArea.style.display = '';
+    btnToggleAdvanced.textContent = '- Advanced';
+  } else {
+    advancedArea.style.display = 'none';
+    addFilename.value = '';
+    addHeaders.value = '';
+    btnToggleAdvanced.textContent = '+ Advanced';
+  }
+});
+
 addForm.addEventListener('submit', function(e) {
   e.preventDefault();
   var url = addUrl.value.trim();
@@ -368,6 +397,11 @@ addForm.addEventListener('submit', function(e) {
   var body = { url: url };
   var fn = addFilename.value.trim();
   if (fn) body.filename = fn;
+
+  if (advancedArea.style.display !== 'none') {
+    var hdrs = parseHeaders(addHeaders.value);
+    if (Object.keys(hdrs).length > 0) body.headers = hdrs;
+  }
 
   var btn = addForm.querySelector('button');
   btn.disabled = true;
