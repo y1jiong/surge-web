@@ -1,11 +1,11 @@
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/surge-web .
 
-FROM alpine:3.21
+FROM alpine:latest
 RUN apk add --no-cache ca-certificates && \
     adduser -D -u 1000 surge
 COPY --from=builder /out/surge-web /usr/local/bin/

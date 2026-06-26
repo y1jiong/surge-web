@@ -46,7 +46,7 @@ Download the latest binary from [Releases](https://github.com/y1jiong/surge-web/
 go install github.com/y1jiong/surge-web@latest
 ```
 
-Requires Go 1.25+.
+Requires Go 1.26+.
 
 ### Docker Compose
 

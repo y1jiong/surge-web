@@ -30,7 +30,7 @@ services:
         condition: service_completed_successfully
 
   surge-web:
-    image: ghcr.io/y1jiong/surge-web:latest
+    image: ghcr.io/y1jiong/surge-web
     container_name: surge-web
     user: "${UID:-1000}:${GID:-1000}"
     ports:
