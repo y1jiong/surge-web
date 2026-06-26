@@ -402,7 +402,11 @@ tbody.addEventListener('click', function(e) {
       }).catch(function(err) { toast('Resume failed: ' + err.message, 'error'); });
       break;
     case 'delete':
-      var purge = confirm('Delete downloaded file as well?');
+      if (!confirm('Remove this download?')) break;
+      var purge = false;
+      if (downloads[id].status === 'completed') {
+        purge = confirm('Also delete downloaded file?');
+      }
       api('POST', (purge ? '/purge' : '/delete') + '?id=' + encodeURIComponent(id)).then(function() {
         delete downloads[id];
         render();
