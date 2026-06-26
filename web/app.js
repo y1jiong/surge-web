@@ -7,7 +7,9 @@ const FILES = '/files';
 
 let downloads = {};
 let sseSource = null;
-let connecting = false;
+let connected = false;
+let sseConnecting = false;
+let renderPending = false;
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -25,6 +27,40 @@ const globalRateInput = $('#global-rate');
 function setStatus(state, text) {
   statusDot.className = 'dot ' + state;
   statusText.textContent = text;
+}
+
+function checkStatus() {
+  fetch('/api/status').then(function(r) {
+    if (!r.ok) throw new Error(r.statusText);
+    return r.json();
+  }).then(function(data) {
+    if (data.connected) {
+      if (!connected) {
+        connected = true;
+        loadList();
+        connectSSE();
+      }
+      setStatus('connected', 'Connected');
+    } else {
+      if (connected) {
+        connected = false;
+        if (sseSource) { sseSource.close(); sseSource = null; }
+        downloads = {};
+        render();
+      }
+      setStatus('disconnected', 'Searching for Surge...');
+    }
+  }).catch(function() {
+    if (connected) {
+      connected = false;
+      if (sseSource) { sseSource.close(); sseSource = null; }
+      setStatus('disconnected', 'Connection lost');
+      downloads = {};
+      render();
+    } else {
+      setStatus('disconnected', 'Searching for Surge...');
+    }
+  });
 }
 
 function fmtBytes(n) {
@@ -75,13 +111,12 @@ function loadList() {
 }
 
 function connectSSE() {
-  if (connecting) return;
-  connecting = true;
-  setStatus('connecting', 'Connecting...');
+  if (sseConnecting) return;
+  sseConnecting = true;
 
   function reconnect() {
     if (sseSource) { sseSource.close(); sseSource = null; }
-    connecting = false;
+    sseConnecting = false;
     setTimeout(connectSSE, 2000);
   }
 
@@ -89,8 +124,7 @@ function connectSSE() {
   sseSource = src;
 
   src.onopen = function() {
-    setStatus('connected', 'Connected');
-    connecting = false;
+    sseConnecting = false;
   };
 
   src.addEventListener('progress', function(e) {
@@ -201,13 +235,21 @@ function connectSSE() {
   });
 
   src.onerror = function() {
-    setStatus('disconnected', 'Disconnected');
     src.close();
     reconnect();
   };
 }
 
 function render() {
+  if (renderPending) return;
+  renderPending = true;
+  requestAnimationFrame(function() {
+    renderPending = false;
+    doRender();
+  });
+}
+
+function doRender() {
   var ids = Object.keys(downloads);
   if (ids.length === 0) {
     table.style.display = 'none';
@@ -251,24 +293,25 @@ function rowHTML(id, d) {
   var etaHTML = d.eta > 0 ? fmtETA(d.eta) : '—';
 
   var actions = '';
+  var escId = esc(id);
   if (d.status === 'downloading') {
-    actions += '<button data-action="pause" data-id="' + id + '">Pause</button>';
+    actions += '<button data-action="pause" data-id="' + escId + '">Pause</button>';
   }
   if (d.status === 'paused' || d.status === 'error') {
-    actions += '<button data-action="resume" data-id="' + id + '">Resume</button>';
+    actions += '<button data-action="resume" data-id="' + escId + '">Resume</button>';
   }
   if (d.status === 'completed') {
-    actions += '<button class="download-btn" data-action="download" data-id="' + id + '">Download</button>';
+    actions += '<button class="download-btn" data-action="download" data-id="' + escId + '">Download</button>';
   }
   if (d.status === 'completed' || d.status === 'error' || d.status === 'paused') {
-    actions += '<button class="danger" data-action="delete" data-id="' + id + '">Delete</button>';
+    actions += '<button class="danger" data-action="delete" data-id="' + escId + '">Delete</button>';
   }
   if (d.status === 'downloading' || d.status === 'queued') {
-    actions += '<button class="danger" data-action="delete" data-id="' + id + '">Cancel</button>';
+    actions += '<button class="danger" data-action="delete" data-id="' + escId + '">Cancel</button>';
   }
 
   return '<tr>' +
-    '<td title="' + esc(d.url || '') + '">' + esc(d.filename || id) + '</td>' +
+    '<td title="' + esc(d.url || '') + '">' + esc(d.filename || escId) + '</td>' +
     '<td class="size">' + fmtBytes(d.total_size) + '</td>' +
     '<td class="progress-cell">' +
       '<div class="progress-bar"><div class="progress-fill ' + progCls + '" style="width:' + Math.min(100, progress) + '%"></div></div>' +
@@ -370,8 +413,14 @@ $('#btn-set-rate').addEventListener('click', function() {
   }).catch(function(err) { toast(err.message, 'error'); });
 });
 
-loadList().then(function() {
-  connectSSE();
+checkStatus();
+setInterval(checkStatus, 5000);
+
+window.addEventListener('beforeunload', function() {
+  if (sseSource) {
+    sseSource.close();
+    sseSource = null;
+  }
 });
 
 })();

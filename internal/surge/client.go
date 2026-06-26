@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 )
@@ -35,13 +34,7 @@ func NewClient(baseURL, token string) *Client {
 }
 
 func NewClientFromDiscovery() (*Client, error) {
-	host := "127.0.0.1"
-	if h := hostEnv(); h != "" {
-		host = h
-	}
-	if p := portEnv(); p > 0 {
-		return NewClient(fmt.Sprintf("http://%s:%d", host, p), ""), nil
-	}
+	host := DiscoverHost()
 	port, ok := DiscoverPort()
 	if !ok {
 		return nil, fmt.Errorf("cannot discover Surge port: ensure Surge is running (surge server)")
@@ -50,40 +43,44 @@ func NewClientFromDiscovery() (*Client, error) {
 	return NewClient(fmt.Sprintf("http://%s:%d", host, port), token), nil
 }
 
-func portEnv() int {
-	if p := strings.TrimSpace(os.Getenv("SURGE_PORT")); p != "" {
-		var port int
-		if _, err := fmt.Sscanf(p, "%d", &port); err == nil && port > 0 {
-			return port
-		}
+func (c *Client) newRequest(ctx context.Context, method, path string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
 	}
-	return 0
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
+	return req, nil
 }
 
-func hostEnv() string {
-	if h := strings.TrimSpace(os.Getenv("SURGE_HOST")); h != "" {
-		return h
+func (c *Client) NewSSERequest(ctx context.Context) (*http.Request, error) {
+	req, err := c.newRequest(ctx, http.MethodGet, "/events")
+	if err != nil {
+		return nil, err
 	}
-	return ""
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Cache-Control", "no-cache")
+	return req, nil
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body any) (*http.Response, error) {
-	var reader io.Reader
+	var bodyReader io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
 		if err != nil {
 			return nil, fmt.Errorf("marshal request: %w", err)
 		}
-		reader = bytes.NewReader(data)
+		bodyReader = bytes.NewReader(data)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, reader)
+	req, err := c.newRequest(ctx, method, path)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	if c.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.Token)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+		req.Body = io.NopCloser(bodyReader)
 	}
 
 	return c.HTTPClient.Do(req)
@@ -271,24 +268,19 @@ func (c *Client) SetGlobalRateLimit(ctx context.Context, rate int64) error {
 }
 
 func (c *Client) StreamEvents(ctx context.Context) (<-chan SSEEvent, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/events", nil)
+	req, err := c.NewSSERequest(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create SSE request: %w", err)
 	}
-	if c.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.Token)
-	}
-	req.Header.Set("Accept", "text/event-stream")
-	req.Header.Set("Cache-Control", "no-cache")
 
 	resp, err := c.SSEClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("SSE connect failed: %w", err)
+		return nil, fmt.Errorf("sse connect failed: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		return nil, fmt.Errorf("SSE connect failed: %s", resp.Status)
+		return nil, fmt.Errorf("sse connect failed: %s", resp.Status)
 	}
 
 	ch := make(chan SSEEvent, 64)

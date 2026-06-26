@@ -73,6 +73,13 @@ func readTrimmed(path string) (string, error) {
 	return val, nil
 }
 
+func DiscoverHost() string {
+	if h := strings.TrimSpace(os.Getenv("SURGE_HOST")); h != "" {
+		return h
+	}
+	return "127.0.0.1"
+}
+
 func DiscoverPort() (int, bool) {
 	if portStr := strings.TrimSpace(os.Getenv("SURGE_PORT")); portStr != "" {
 		var port int

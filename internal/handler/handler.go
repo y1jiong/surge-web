@@ -6,32 +6,61 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
+	"sync"
 
 	"surge-web/internal/surge"
 )
 
 type Proxy struct {
-	Client *surge.Client
-	Token  string
+	mu     sync.RWMutex
+	client *surge.Client
 	Logger *log.Logger
 }
 
-func NewProxy(client *surge.Client, logger *log.Logger) *Proxy {
-	return &Proxy{
-		Client: client,
-		Token:  client.Token,
-		Logger: logger,
+func NewProxy(logger *log.Logger) *Proxy {
+	return &Proxy{Logger: logger}
+}
+
+func (p *Proxy) SetClient(c *surge.Client) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.client = c
+}
+
+func (p *Proxy) GetClient() *surge.Client {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.client
+}
+
+func (p *Proxy) HandleStatus(w http.ResponseWriter, r *http.Request) {
+	c := p.GetClient()
+	connected := c != nil && c.BaseURL != ""
+	baseURL := ""
+	if c != nil {
+		baseURL = c.BaseURL
 	}
+	p.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"connected": connected,
+		"baseURL":   baseURL,
+	})
 }
 
 func (p *Proxy) ProxyAPI(w http.ResponseWriter, r *http.Request) {
+	c := p.GetClient()
+	if c == nil || c.BaseURL == "" {
+		p.writeError(w, http.StatusServiceUnavailable, "surge not connected")
+		return
+	}
+
 	targetPath := strings.TrimPrefix(r.URL.Path, "/api")
 	if targetPath == "" {
 		targetPath = "/"
 	}
 
-	targetURL := p.Client.BaseURL + targetPath
+	targetURL := c.BaseURL + targetPath
 	if r.URL.RawQuery != "" {
 		targetURL += "?" + r.URL.RawQuery
 	}
@@ -48,18 +77,27 @@ func (p *Proxy) ProxyAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	if p.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+p.Token)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
 	}
 
-	resp, err := p.Client.HTTPClient.Do(req)
+	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		http.Error(w, "surge unreachable", http.StatusBadGateway)
 		p.Logger.Printf("proxy request error: %v", err)
 		return
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		p.Logger.Printf("auth token rejected by surge, clearing client to trigger re-discovery")
+		p.SetClient(nil)
+		http.Error(w, "surge authentication failed – reconnecting", http.StatusBadGateway)
+		return
+	}
 
 	for key, values := range resp.Header {
 		for _, val := range values {
@@ -72,27 +110,28 @@ func (p *Proxy) ProxyAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Proxy) ProxySSE(w http.ResponseWriter, r *http.Request) {
+	c := p.GetClient()
+	if c == nil || c.BaseURL == "" {
+		http.Error(w, "surge not connected", http.StatusServiceUnavailable)
+		return
+	}
+
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
 		return
 	}
 
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, p.Client.BaseURL+"/events", nil)
+	req, err := c.NewSSERequest(r.Context())
 	if err != nil {
 		http.Error(w, "sse error", http.StatusInternalServerError)
 		return
 	}
-	if p.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+p.Token)
-	}
-	req.Header.Set("Accept", "text/event-stream")
-	req.Header.Set("Cache-Control", "no-cache")
 
-	resp, err := p.Client.SSEClient.Do(req)
+	resp, err := c.SSEClient.Do(req)
 	if err != nil {
 		http.Error(w, "surge unreachable", http.StatusBadGateway)
-		p.Logger.Printf("SSE connect error: %v", err)
+		p.Logger.Printf("sse connect error: %v", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -131,15 +170,23 @@ func (p *Proxy) writeError(w http.ResponseWriter, status int, message string) {
 }
 
 func (p *Proxy) HandleGetToken(w http.ResponseWriter, r *http.Request) {
+	c := p.GetClient()
+	token := ""
+	baseURL := ""
+	if c != nil {
+		token = c.Token
+		baseURL = c.BaseURL
+	}
 	p.writeJSON(w, http.StatusOK, map[string]string{
-		"token":   p.Token,
-		"baseURL": p.Client.BaseURL,
+		"token":   token,
+		"baseURL": baseURL,
 	})
 }
 
 func (p *Proxy) ServeMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
+	mux.HandleFunc("/api/status", p.HandleStatus)
 	mux.HandleFunc("/api/", p.ProxyAPI)
 	mux.HandleFunc("/events", p.ProxySSE)
 	mux.HandleFunc("/api/token", p.HandleGetToken)
@@ -158,9 +205,15 @@ func (p *Proxy) ServeMux() *http.ServeMux {
 }
 
 func (p *Proxy) serveFile(w http.ResponseWriter, r *http.Request, id string) {
-	status, err := p.Client.GetStatus(r.Context(), id)
+	c := p.GetClient()
+	if c == nil || c.BaseURL == "" {
+		p.writeError(w, http.StatusServiceUnavailable, "surge not connected")
+		return
+	}
+
+	status, err := c.GetStatus(r.Context(), id)
 	if err != nil {
-		entries, herr := p.Client.History(r.Context())
+		entries, herr := c.History(r.Context())
 		if herr != nil {
 			p.writeError(w, http.StatusNotFound, "download not found")
 			return
@@ -180,6 +233,11 @@ func (p *Proxy) serveFile(w http.ResponseWriter, r *http.Request, id string) {
 func (p *Proxy) streamFile(w http.ResponseWriter, r *http.Request, destPath, filename string) {
 	if destPath == "" {
 		p.writeError(w, http.StatusNotFound, "file path not available")
+		return
+	}
+
+	if _, err := os.Stat(destPath); err != nil {
+		p.writeError(w, http.StatusNotFound, "file not found")
 		return
 	}
 

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -24,40 +25,35 @@ var webFiles embed.FS
 
 func main() {
 	var (
-		port          int
-		surgeHost     string
-		surgePort     int
-		surgeToken    string
-		downloadDir   string
+		port       int
+		surgeHost  string
+		surgePort  int
+		surgeToken string
 	)
-	flag.IntVar(&port, "port", 8080, "Web UI listen port")
-	flag.StringVar(&surgeHost, "surge-host", "", "Surge server address (default: auto-detect)")
-	flag.IntVar(&surgePort, "surge-port", 0, "Surge server port (default: auto-detect)")
-	flag.StringVar(&surgeToken, "token", "", "Surge API token (default: auto-detect)")
-	flag.StringVar(&downloadDir, "dl-dir", "", "Download output directory (default: Surge's default)")
+	flag.IntVar(&port, "port", 8080, "listen port for the web UI")
+	flag.StringVar(&surgeHost, "surge-host", "", "surge server address (default: auto-detect)")
+	flag.IntVar(&surgePort, "surge-port", 0, "surge server port (default: auto-detect)")
+	flag.StringVar(&surgeToken, "token", "", "surge API token (default: auto-detect)")
 	flag.Parse()
 
 	logger := log.New(os.Stderr, "[surge-web] ", log.LstdFlags)
 
-	client := createClient(surgeHost, surgePort, surgeToken, logger)
+	proxy := handler.NewProxy(logger)
 
-	if client.BaseURL != "" {
-		if err := client.Health(); err != nil {
-			logger.Printf("Warning: Surge at %s is not reachable: %v", client.BaseURL, err)
-		} else {
-			logger.Printf("Connected to Surge at %s", client.BaseURL)
-		}
+	if surgeHost != "" || surgePort > 0 {
+		tryConnect(proxy, surgeHost, surgePort, surgeToken, logger)
+		startRetryLoop(proxy, logger, true, surgeHost, surgePort, surgeToken)
 	} else {
-		logger.Printf("Warning: No Surge instance found. Start Surge with 'surge server', then reload this page.")
+		logger.Println("auto-discovering Surge...")
+		tryConnect(proxy, surgeHost, surgePort, surgeToken, logger)
+		startRetryLoop(proxy, logger, false, "", 0, "")
 	}
-
-	proxy := handler.NewProxy(client, logger)
 
 	mux := proxy.ServeMux()
 
 	webFS, err := fs.Sub(webFiles, "web")
 	if err != nil {
-		logger.Fatalf("Failed to load web files: %v", err)
+		logger.Fatalf("failed to load web files: %v", err)
 	}
 	fileServer := http.FileServer(http.FS(webFS))
 	mux.Handle("/", fileServer)
@@ -69,31 +65,41 @@ func main() {
 
 	ln, err := net.Listen("tcp", srv.Addr)
 	if err != nil {
-		logger.Fatalf("Failed to listen on :%d: %v", port, err)
+		logger.Fatalf("failed to listen on :%d: %v", port, err)
 	}
 
-	logger.Printf("Web UI available at http://localhost:%d", port)
-	if client.Token != "" {
-		logger.Printf("API token: %s", maskToken(client.Token))
-	}
+	logger.Printf("web UI available at http://localhost:%d", port)
 
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		sig := <-sigCh
-		logger.Printf("Received %v, shutting down...", sig)
+		logger.Printf("received %v, shutting down...", sig)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		srv.Shutdown(ctx)
 	}()
 
-	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
-		logger.Fatalf("Server error: %v", err)
+	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		logger.Fatalf("server error: %v", err)
 	}
-	logger.Println("Server stopped")
+	logger.Println("server stopped")
 }
 
-func createClient(host string, port int, token string, logger *log.Logger) *surge.Client {
+func tryConnect(proxy *handler.Proxy, host string, port int, token string, logger *log.Logger) {
+	c, err := discoverAndConnect(host, port, token)
+	if err != nil {
+		logger.Printf("surge not available: %v", err)
+		return
+	}
+	proxy.SetClient(c)
+	logger.Printf("connected to Surge at %s", c.BaseURL)
+	if c.Token != "" {
+		logger.Printf("API token: %s", maskToken(c.Token))
+	}
+}
+
+func discoverAndConnect(host string, port int, token string) (*surge.Client, error) {
 	if host != "" || port > 0 {
 		if host == "" {
 			host = "127.0.0.1"
@@ -102,17 +108,66 @@ func createClient(host string, port int, token string, logger *log.Logger) *surg
 			port = 1700
 		}
 		baseURL := fmt.Sprintf("http://%s:%d", host, port)
-		logger.Printf("Using explicit Surge address: %s", baseURL)
-		return surge.NewClient(baseURL, token)
+		c := surge.NewClient(baseURL, token)
+		if err := c.Health(); err != nil {
+			return nil, fmt.Errorf("surge at %s not reachable: %w", baseURL, err)
+		}
+		return c, nil
 	}
 
-	logger.Println("Auto-discovering Surge...")
-	client, err := surge.NewClientFromDiscovery()
+	c, err := surge.NewClientFromDiscovery()
 	if err != nil {
-		logger.Printf("Auto-discovery failed: %v", err)
-		return &surge.Client{}
+		return nil, err
 	}
-	return client
+	if err := c.Health(); err != nil {
+		return nil, fmt.Errorf("surge at %s not reachable: %w", c.BaseURL, err)
+	}
+	return c, nil
+}
+
+func startRetryLoop(proxy *handler.Proxy, logger *log.Logger, explicit bool, host string, port int, token string) {
+	go func() {
+		backoff := 2 * time.Second
+		const maxBackoff = 30 * time.Second
+		for {
+			c := proxy.GetClient()
+			if c != nil && c.BaseURL != "" {
+				if err := c.Health(); err != nil {
+					logger.Printf("lost connection to Surge: %v", err)
+					proxy.SetClient(nil)
+				} else {
+					backoff = 2 * time.Second
+					time.Sleep(backoff)
+					continue
+				}
+			}
+
+			var discovered *surge.Client
+			var err error
+			if explicit {
+				discovered, err = discoverAndConnect(host, port, token)
+			} else {
+				discovered, err = discoverAndConnect("", 0, "")
+			}
+
+			if err != nil {
+				backoff *= 2
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
+				time.Sleep(backoff)
+				continue
+			}
+
+			proxy.SetClient(discovered)
+			logger.Printf("connected to Surge at %s", discovered.BaseURL)
+			if discovered.Token != "" {
+				logger.Printf("API token: %s", maskToken(discovered.Token))
+			}
+			backoff = 2 * time.Second
+			time.Sleep(backoff)
+		}
+	}()
 }
 
 func maskToken(t string) string {
