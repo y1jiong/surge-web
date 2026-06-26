@@ -1,9 +1,6 @@
 BINARY_NAME = surge-web
 CODE_FILE = ./main.go
 OUTPUT_PATH = ./manifest/build
-GIT_TAG = $(shell git describe --tags --abbrev=0)
-GIT_COMMIT = $(shell git log -1 --pretty=format:"%ci %h")
-BUILD_TIME = $(shell date +"%F %T %z")
 LDFLAGS = -s -w -buildid=
 
 

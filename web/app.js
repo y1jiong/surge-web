@@ -274,6 +274,7 @@ function connectSSE() {
   });
 
   src.onerror = function() {
+    if (src.readyState === EventSource.CONNECTING || src.readyState === EventSource.OPEN) return;
     src.close();
     reconnect();
   };

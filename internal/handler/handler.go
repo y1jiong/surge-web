@@ -169,27 +169,12 @@ func (p *Proxy) writeError(w http.ResponseWriter, status int, message string) {
 	p.writeJSON(w, status, map[string]string{"status": "error", "message": message})
 }
 
-func (p *Proxy) HandleGetToken(w http.ResponseWriter, r *http.Request) {
-	c := p.GetClient()
-	token := ""
-	baseURL := ""
-	if c != nil {
-		token = c.Token
-		baseURL = c.BaseURL
-	}
-	p.writeJSON(w, http.StatusOK, map[string]string{
-		"token":   token,
-		"baseURL": baseURL,
-	})
-}
-
 func (p *Proxy) ServeMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/status", p.HandleStatus)
 	mux.HandleFunc("/api/", p.ProxyAPI)
 	mux.HandleFunc("/events", p.ProxySSE)
-	mux.HandleFunc("/api/token", p.HandleGetToken)
 
 	mux.HandleFunc("/file/", func(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/file/"), "/")

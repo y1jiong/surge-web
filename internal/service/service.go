@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -10,13 +9,10 @@ import (
 
 type program struct {
 	exit    chan struct{}
-	cancel  context.CancelFunc
 	runFunc func()
 }
 
 func (p *program) Start(s service.Service) error {
-	_, cancel := context.WithCancel(context.Background())
-	p.cancel = cancel
 	p.exit = make(chan struct{})
 
 	go func() {
@@ -28,9 +24,6 @@ func (p *program) Start(s service.Service) error {
 }
 
 func (p *program) Stop(s service.Service) error {
-	if p.cancel != nil {
-		p.cancel()
-	}
 	if p.exit != nil {
 		<-p.exit
 	}
