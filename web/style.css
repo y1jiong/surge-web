@@ -278,6 +278,10 @@ td:first-child { max-width: 260px; overflow: hidden; text-overflow: ellipsis; wh
   border-color: var(--green);
   color: var(--green);
 }
+.actions button.encrypt-btn:hover {
+  border-color: var(--yellow);
+  color: var(--yellow);
+}
 
 .toast {
   position: fixed;
@@ -298,3 +302,119 @@ td:first-child { max-width: 260px; overflow: hidden; text-overflow: ellipsis; wh
   from { transform: translateY(20px); opacity: 0; }
   to   { transform: translateY(0); opacity: 1; }
 }
+
+#decrypt-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+}
+.modal-box {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 400px;
+  max-width: 90vw;
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+  font-weight: 600;
+}
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.modal-close:hover { color: var(--text); }
+.modal-body {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.modal-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+}
+.modal-hint code {
+  background: var(--bg);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+#decrypt-dropzone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 28px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .2s;
+}
+#decrypt-dropzone:hover { border-color: var(--accent); }
+#decrypt-dropzone.dragover { border-color: var(--green); background: rgba(63,185,80,.05); }
+#decrypt-drop-text {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+#decrypt-password {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+}
+#decrypt-password:focus { border-color: var(--accent); }
+#decrypt-btn {
+  padding: 10px 24px;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity .2s;
+}
+#decrypt-btn:hover { opacity: .85; }
+#decrypt-btn:disabled { opacity: .5; cursor: default; }
+.decrypt-error {
+  font-size: 13px;
+  color: var(--red);
+  padding: 8px 12px;
+  background: rgba(248,81,73,.1);
+  border: 1px solid var(--red);
+  border-radius: var(--radius);
+}
+
+#btn-decrypt-tool {
+  padding: 6px 14px;
+  background: var(--surface);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color .2s;
+}
+#btn-decrypt-tool:hover { border-color: var(--accent); }

@@ -1,11 +1,17 @@
 package handler
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -38,13 +44,8 @@ func (p *Proxy) GetClient() *surge.Client {
 func (p *Proxy) HandleStatus(w http.ResponseWriter, r *http.Request) {
 	c := p.GetClient()
 	connected := c != nil && c.BaseURL != ""
-	baseURL := ""
-	if c != nil {
-		baseURL = c.BaseURL
-	}
 	p.writeJSON(w, http.StatusOK, map[string]interface{}{
 		"connected": connected,
-		"baseURL":   baseURL,
 	})
 }
 
@@ -183,6 +184,10 @@ func (p *Proxy) ServeMux() *http.ServeMux {
 			return
 		}
 		id := parts[0]
+		if len(parts) > 1 && parts[1] == "encrypt" {
+			p.serveEncryptedFile(w, r, id)
+			return
+		}
 		p.serveFile(w, r, id)
 	})
 
@@ -234,4 +239,106 @@ func (p *Proxy) streamFile(w http.ResponseWriter, r *http.Request, destPath, fil
 	w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
 
 	http.ServeFile(w, r, filepath.Clean(destPath))
+}
+
+func (p *Proxy) serveEncryptedFile(w http.ResponseWriter, r *http.Request, id string) {
+	c := p.GetClient()
+	if c == nil || c.BaseURL == "" {
+		p.writeError(w, http.StatusServiceUnavailable, "surge not connected")
+		return
+	}
+
+	password := r.URL.Query().Get("password")
+	if password == "" {
+		p.writeError(w, http.StatusBadRequest, "missing password parameter")
+		return
+	}
+
+	status, err := c.GetStatus(r.Context(), id)
+	if err != nil {
+		if !strings.Contains(err.Error(), "not found") {
+			p.writeError(w, http.StatusBadGateway, "surge request failed")
+			return
+		}
+		entries, herr := c.History(r.Context())
+		if herr != nil {
+			p.writeError(w, http.StatusNotFound, "download not found")
+			return
+		}
+		for _, e := range entries {
+			if e.ID == id {
+				p.encryptAndStream(w, r, e.DestPath, e.Filename, password)
+				return
+			}
+		}
+		p.writeError(w, http.StatusNotFound, "download not found")
+		return
+	}
+	p.encryptAndStream(w, r, status.DestPath, status.Filename, password)
+}
+
+func (p *Proxy) encryptAndStream(w http.ResponseWriter, r *http.Request, destPath, filename, password string) {
+	if destPath == "" {
+		p.writeError(w, http.StatusNotFound, "file path not available")
+		return
+	}
+
+	if filename == "" {
+		filename = filepath.Base(destPath)
+	}
+
+	f, err := os.Open(filepath.Clean(destPath))
+	if err != nil {
+		p.writeError(w, http.StatusNotFound, "file not found on disk")
+		return
+	}
+	defer f.Close()
+
+	encKey := sha256.Sum256([]byte("enc" + password))
+
+	block, err := aes.NewCipher(encKey[:])
+	if err != nil {
+		p.writeError(w, http.StatusInternalServerError, "encryption error")
+		return
+	}
+
+	nonce := make([]byte, 16)
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		p.writeError(w, http.StatusInternalServerError, "encryption error")
+		return
+	}
+
+	ctr := cipher.NewCTR(block, nonce)
+
+	encFilename := filename + ".enc"
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+url.QueryEscape(encFilename))
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
+	w.WriteHeader(http.StatusOK)
+
+	w.Write([]byte("SENC"))
+	w.Write([]byte{0x02})
+	w.Write(nonce)
+
+	nameLen := make([]byte, 4)
+	binary.LittleEndian.PutUint32(nameLen, uint32(len(filename)))
+	nameHeader := append(nameLen, []byte(filename)...)
+
+	encHeader := make([]byte, len(nameHeader))
+	ctr.XORKeyStream(encHeader, nameHeader)
+	w.Write(encHeader)
+
+	buf := make([]byte, 64*1024)
+	for {
+		n, readErr := f.Read(buf)
+		if n > 0 {
+			encChunk := make([]byte, n)
+			ctr.XORKeyStream(encChunk, buf[:n])
+			w.Write(encChunk)
+		}
+		if readErr != nil {
+			break
+		}
+	}
 }

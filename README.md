@@ -7,7 +7,7 @@
 [![Go Version](https://img.shields.io/github/go-mod/go-version/y1jiong/surge-web?style=flat-square&color=cyan)](go.mod)
 [![License](https://img.shields.io/badge/License-Apache%202.0-grey.svg?style=flat-square)](LICENSE)
 
-[Installation](#installation) • [Usage](#usage) • [Docker Compose](#docker-compose) • [Building](#building)
+[Installation](#installation) • [Usage](#usage) • [Docker Compose](#docker-compose) • [Encrypted Download](#encrypted-download) • [Building](#building)
 
 </div>
 
@@ -29,6 +29,7 @@ It acts as a **lightweight proxy** between your browser and Surge's HTTP API, wi
 - **File management** — delete downloads with optional file removal, serve completed files via browser
 - **Global rate limit** — set bandwidth limits directly from the web UI
 - **Single binary** — frontend embedded with Go's `embed`, no external assets needed
+- **Encrypted download** — encrypt completed files with a password before downloading, decrypt locally in-browser
 - **Dark theme** — GitHub-style color scheme, clean and minimal
 - **System service** — install as a daemon via `surge-web service install`
 - **Docker Compose** — one-command deployment with Surge and Surge Web
@@ -133,6 +134,30 @@ make linux-amd64    # Linux x86_64
 make darwin-arm64   # macOS Apple Silicon
 make windows-amd64  # Windows x86_64
 ```
+
+---
+
+## Encrypted Download
+
+Surge Web supports **password-protected encrypted downloads** to keep file contents private during transfer. Files are encrypted with AES-256-CTR before leaving the server.
+
+### Encrypt a file
+
+1. Wait for a download to complete.
+2. Click the **Encrypt** button beside the download entry.
+3. Enter a password when prompted.
+4. The encrypted file (`.enc`) will download to your device.
+
+### Decrypt a file
+
+1. Click the **Decrypt File** button in the toolbar.
+2. Select or drag the `.enc` file into the drop zone.
+3. Enter the same password used during encryption.
+4. Click **Decrypt & Download** — the original file is restored and saved locally.
+
+Decryption runs entirely in your browser via the Web Crypto API. No data leaves your device, and no additional tools are required.
+
+> **Note:** The encrypted format (`SENC` v0x02) is specific to Surge Web. Files are encrypted using AES-256-CTR. Keys are derived from the password using SHA-256 with domain separation. The original filename is preserved inside the encrypted container.
 
 ---
 

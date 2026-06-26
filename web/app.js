@@ -366,6 +366,7 @@ function rowHTML(id, d) {
   }
   if (d.status === 'completed') {
     actions += '<button class="download-btn" data-action="download" data-id="' + escId + '">Download</button>';
+    actions += '<button class="encrypt-btn" data-action="encrypt" data-id="' + escId + '">Encrypt</button>';
   }
   if (d.status === 'completed' || d.status === 'error' || d.status === 'paused') {
     actions += '<button class="danger" data-action="delete" data-id="' + escId + '">Delete</button>';
@@ -376,7 +377,7 @@ function rowHTML(id, d) {
 
   return '<tr data-id="' + escId + '">' +
     '<td class="filename-cell" title="' + esc(d.filename || d.url || '') + '" data-filename="' + esc(d.filename || '') + '" data-url="' + esc(d.url || '') + '">' +
-      esc(d.filename || escId) + ' <span class="copy-url" title="Copy URL">\u2197</span>' +
+      '<div class="filename-wrap"><span class="file-name">' + esc(d.filename || escId) + '</span> <span class="copy-url" title="Copy URL">\u2197</span></div>' +
     '</td>' +
     '<td class="size">' + fmtBytes(d.total_size) + '</td>' +
     '<td class="progress-cell">' +
@@ -449,6 +450,17 @@ tbody.addEventListener('click', function(e) {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      break;
+    case 'encrypt':
+      var pw = prompt('Enter encryption password:');
+      if (!pw) break;
+      var encUrl = FILES + '/' + id + '/encrypt?password=' + encodeURIComponent(pw);
+      var ea = document.createElement('a');
+      ea.href = encUrl;
+      ea.download = '';
+      document.body.appendChild(ea);
+      ea.click();
+      document.body.removeChild(ea);
       break;
   }
 });
@@ -559,6 +571,197 @@ window.addEventListener('beforeunload', function() {
     sseSource.close();
     sseSource = null;
   }
+});
+
+var decryptModal = $('#decrypt-modal');
+var decryptClose = $('#decrypt-close');
+var decryptDropzone = $('#decrypt-dropzone');
+var decryptFileInput = $('#decrypt-file-input');
+var decryptDropText = $('#decrypt-drop-text');
+var decryptPassword = $('#decrypt-password');
+var decryptBtn = $('#decrypt-btn');
+var decryptError = $('#decrypt-error');
+var decryptSelectedFile = null;
+
+$('#btn-decrypt-tool').addEventListener('click', function() {
+  decryptModal.style.display = '';
+  decryptError.style.display = 'none';
+  decryptPassword.value = '';
+  decryptSelectedFile = null;
+  decryptDropText.textContent = 'Click to select file or drag here';
+});
+
+decryptClose.addEventListener('click', function() {
+  decryptModal.style.display = 'none';
+});
+
+document.querySelector('.modal-overlay').addEventListener('click', function() {
+  decryptModal.style.display = 'none';
+});
+
+decryptDropzone.addEventListener('click', function() {
+  decryptFileInput.click();
+});
+
+decryptFileInput.addEventListener('change', function() {
+  if (this.files.length > 0) {
+    decryptSelectedFile = this.files[0];
+    decryptDropText.textContent = decryptSelectedFile.name;
+    decryptError.style.display = 'none';
+  }
+});
+
+decryptDropzone.addEventListener('dragover', function(e) {
+  e.preventDefault();
+  this.classList.add('dragover');
+});
+
+decryptDropzone.addEventListener('dragleave', function() {
+  this.classList.remove('dragover');
+});
+
+decryptDropzone.addEventListener('drop', function(e) {
+  e.preventDefault();
+  this.classList.remove('dragover');
+  if (e.dataTransfer.files.length > 0) {
+    decryptSelectedFile = e.dataTransfer.files[0];
+    decryptDropText.textContent = decryptSelectedFile.name;
+    decryptError.style.display = 'none';
+  }
+});
+
+decryptBtn.addEventListener('click', function() {
+  if (!decryptSelectedFile) {
+    decryptError.textContent = 'Please select a .enc file.';
+    decryptError.style.display = '';
+    return;
+  }
+  var pw = decryptPassword.value;
+  if (!pw) {
+    decryptError.textContent = 'Please enter the password.';
+    decryptError.style.display = '';
+    return;
+  }
+
+  if (!window.crypto || !crypto.subtle) {
+    decryptError.textContent = 'Web Crypto API not available. Use HTTPS or open via localhost.';
+    decryptError.style.display = '';
+    return;
+  }
+
+  decryptBtn.disabled = true;
+  decryptBtn.textContent = 'Reading header...';
+  decryptError.style.display = 'none';
+
+  var file = decryptSelectedFile;
+  var headerSize = 21;
+
+  if (file.size < headerSize) {
+    decryptError.textContent = 'Invalid .enc file format.';
+    decryptError.style.display = '';
+    decryptBtn.disabled = false;
+    decryptBtn.textContent = 'Decrypt & Download';
+    return;
+  }
+
+  file.slice(0, headerSize).arrayBuffer().then(function(headerBuf) {
+    var header = new Uint8Array(headerBuf);
+    if (String.fromCharCode.apply(null, header.slice(0, 4)) !== 'SENC' || header[4] !== 0x02) {
+      throw new Error('Invalid format');
+    }
+    var nonce = header.slice(5, 21);
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode('enc' + pw))
+      .then(function(kh) { return crypto.subtle.importKey('raw', kh, {name: 'AES-CTR'}, false, ['decrypt']); })
+      .then(function(encKey) { return {encKey: encKey, nonce: nonce}; });
+  }).then(function(state) {
+    var encKey = state.encKey;
+    var nonce = state.nonce;
+    var cipherSize = file.size - headerSize;
+    var stream = file.slice(headerSize).stream();
+    var reader = stream.getReader();
+    var bytesRead = 0;
+    var nameParsed = false;
+    var filename = '';
+    var writable = null;
+    var blobChunks = [];
+
+    function makeCounter(base, blockOffset) {
+      var n = 0n;
+      for (var i = 0; i < base.length; i++) n = (n << 8n) | BigInt(base[i]);
+      n += BigInt(blockOffset);
+      var r = new Uint8Array(16);
+      for (var i = 15; i >= 0; i--) { r[i] = Number(n & 0xFFn); n >>= 8n; }
+      return r;
+    }
+
+    function process() {
+      return reader.read().then(function(result) {
+        if (result.done) return null;
+        var chunk = new Uint8Array(result.value);
+        var blockOffset = bytesRead / 16;
+        bytesRead += chunk.length;
+        return crypto.subtle.decrypt(
+          {name: 'AES-CTR', counter: makeCounter(nonce, blockOffset), length: 128},
+          encKey, chunk
+        ).then(function(decrypted) {
+          var plain = new Uint8Array(decrypted);
+          var pct = Math.round(bytesRead / cipherSize * 100);
+
+          if (!nameParsed) {
+            var nameLen = new DataView(plain.buffer, plain.byteOffset, 4).getUint32(0, true);
+            if (nameLen > 255) throw new Error('Wrong password or corrupted file');
+            filename = new TextDecoder().decode(plain.slice(4, 4 + nameLen));
+            nameParsed = true;
+            var contentStart = 4 + nameLen;
+            if (window.showSaveFilePicker) {
+              decryptBtn.textContent = 'Saving...';
+              return window.showSaveFilePicker({suggestedName: filename}).then(function(handle) {
+                return handle.createWritable().then(function(w) {
+                  writable = w;
+                  if (contentStart < plain.length) {
+                    decryptBtn.textContent = 'Saving... ' + pct + '%';
+                    return writable.write(plain.slice(contentStart)).then(function() { return process(); });
+                  }
+                  return process();
+                });
+              });
+            }
+            if (contentStart < plain.length) blobChunks.push(plain.slice(contentStart));
+            decryptBtn.textContent = 'Decrypting... ' + pct + '%';
+            return process();
+          }
+
+          if (writable) {
+            decryptBtn.textContent = 'Saving... ' + pct + '%';
+            return writable.write(plain).then(function() { return process(); });
+          }
+          blobChunks.push(plain);
+          decryptBtn.textContent = 'Decrypting... ' + pct + '%';
+          return process();
+        });
+      });
+    }
+
+    decryptBtn.textContent = 'Decrypting...';
+    return process().then(function() {
+      if (writable) return writable.close();
+      var blob = new Blob(blobChunks);
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+  }).then(function() {
+    decryptModal.style.display = 'none';
+  }).catch(function(e) {
+    if (e.name === 'AbortError') return;
+    decryptError.textContent = 'Decryption failed. Wrong password or corrupted file.';
+    decryptError.style.display = '';
+  }).finally(function() {
+    decryptBtn.disabled = false;
+    decryptBtn.textContent = 'Decrypt & Download';
+  });
 });
 
 })();
