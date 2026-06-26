@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 
@@ -191,8 +190,8 @@ func (p *Proxy) ServeMux() *http.ServeMux {
 	mux.HandleFunc("/events", p.ProxySSE)
 	mux.HandleFunc("/api/token", p.HandleGetToken)
 
-	mux.HandleFunc("/files/", func(w http.ResponseWriter, r *http.Request) {
-		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/files/"), "/")
+	mux.HandleFunc("/file/", func(w http.ResponseWriter, r *http.Request) {
+		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/file/"), "/")
 		if len(parts) == 0 || parts[0] == "" {
 			p.writeError(w, http.StatusBadRequest, "missing download id")
 			return
@@ -233,11 +232,6 @@ func (p *Proxy) serveFile(w http.ResponseWriter, r *http.Request, id string) {
 func (p *Proxy) streamFile(w http.ResponseWriter, r *http.Request, destPath, filename string) {
 	if destPath == "" {
 		p.writeError(w, http.StatusNotFound, "file path not available")
-		return
-	}
-
-	if _, err := os.Stat(destPath); err != nil {
-		p.writeError(w, http.StatusNotFound, "file not found")
 		return
 	}
 

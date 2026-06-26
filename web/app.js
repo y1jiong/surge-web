@@ -3,7 +3,7 @@
 
 const API = '/api';
 const EVENTS = '/events';
-const FILES = '/files';
+const FILES = '/file';
 
 let downloads = {};
 let sseSource = null;
@@ -125,7 +125,11 @@ function api(method, path, body) {
 function loadList() {
   return api('GET', '/list').then(function(data) {
     if (Array.isArray(data)) {
-      data.forEach(function(d) { downloads[d.id] = d; });
+      data.forEach(function(d) {
+        d.progress = d.status === 'completed' ? 100 : d.progress || 0;
+        d.speed = d.status === 'completed' ? 0 : d.speed || 0;
+        downloads[d.id] = d;
+      });
     }
     return api('GET', '/history');
   }).then(function(data) {
@@ -303,7 +307,9 @@ function doRender() {
     var pb = (sb.status === 'downloading' || sb.status === 'queued') ? 0 :
              sb.status === 'paused' ? 1 : 2;
     if (pa !== pb) return pa - pb;
-    return sa.filename && sb.filename ? sa.filename.localeCompare(sb.filename) : 0;
+    var ta = sa.added_at || sa.completed_at || 0;
+    var tb = sb.added_at || sb.completed_at || 0;
+    return tb - ta;
   });
 
   var key = ids.map(function(id) { return id + ':' + downloads[id].status; }).join('|');
@@ -320,11 +326,13 @@ function doRender() {
       var fill = row.querySelector('.progress-fill');
       if (fill) fill.style.width = Math.min(100, d.progress || 0) + '%';
       var text = row.querySelector('.progress-text');
-      if (text) text.textContent = d.status === 'downloading' ? (d.progress || 0).toFixed(1) + '%' : '';
+      if (text && d.status === 'downloading') text.textContent = (d.progress || 0).toFixed(1) + '%';
       var speed = row.querySelector('.speed');
-      if (speed) speed.textContent = d.speed > 0 ? fmtSpeed(d.speed) : '\u2014';
+      if (speed) speed.textContent = (d.status !== 'downloading') ? '\u2014' :
+                                     d.speed > 0 ? fmtSpeed(d.speed) : '\u2014';
       var eta = row.querySelector('.eta');
-      if (eta) eta.textContent = d.eta > 0 ? fmtETA(d.eta) : '\u2014';
+      if (eta) eta.textContent = (d.status !== 'downloading') ? '\u2014' :
+                                 d.eta > 0 ? fmtETA(d.eta) : '\u2014';
     });
   }
 }
@@ -338,12 +346,14 @@ function rowHTML(id, d) {
   var statusText = d.status === 'error' ? '<span style="color:var(--red)">' + esc(d.error || 'Error') + '</span>' :
                    d.status === 'queued' ? '⏳ Queued' :
                    d.status === 'paused' ? '⏸ Paused' :
-                   d.status === 'completed' ? '✅ Completed' :
+                   d.status === 'completed' ? 'Completed' :
                    d.status === 'downloading' ? progress.toFixed(1) + '%' :
                    esc(d.status);
 
-  var speedHTML = d.speed > 0 ? fmtSpeed(d.speed) : '—';
-  var etaHTML = d.eta > 0 ? fmtETA(d.eta) : '—';
+  var speedHTML = (d.status === 'completed' || d.status === 'error' || d.status === 'queued') ? '—' :
+                  d.speed > 0 ? fmtSpeed(d.speed) : '—';
+  var etaHTML = (d.status === 'completed' || d.status === 'error' || d.status === 'queued') ? '—' :
+                d.eta > 0 ? fmtETA(d.eta) : '—';
 
   var actions = '';
   var escId = esc(id);
@@ -364,7 +374,9 @@ function rowHTML(id, d) {
   }
 
   return '<tr data-id="' + escId + '">' +
-    '<td title="' + esc(d.url || '') + '">' + esc(d.filename || escId) + '</td>' +
+    '<td class="filename-cell" title="' + esc(d.filename || d.url || '') + '" data-filename="' + esc(d.filename || '') + '" data-url="' + esc(d.url || '') + '">' +
+      esc(d.filename || escId) + ' <span class="copy-url" title="Copy URL">\u2197</span>' +
+    '</td>' +
     '<td class="size">' + fmtBytes(d.total_size) + '</td>' +
     '<td class="progress-cell">' +
       '<div class="progress-bar"><div class="progress-fill ' + progCls + '" style="width:' + Math.min(100, progress) + '%"></div></div>' +
@@ -382,6 +394,23 @@ function esc(s) {
 }
 
 tbody.addEventListener('click', function(e) {
+  var cell = e.target.closest('.filename-cell');
+  if (cell) {
+    if (e.target.closest('.copy-url')) {
+      var url = cell.dataset.url;
+      if (url) {
+        navigator.clipboard.writeText(url).then(function() {
+          toast('Copied URL', 'success');
+        }).catch(function() {});
+      }
+    } else if (cell.dataset.filename) {
+      navigator.clipboard.writeText(cell.dataset.filename).then(function() {
+        toast('Copied: ' + cell.dataset.filename, 'success');
+      }).catch(function() {});
+    }
+    return;
+  }
+
   var btn = e.target.closest('button[data-action]');
   if (!btn) return;
   var action = btn.dataset.action;
@@ -413,7 +442,12 @@ tbody.addEventListener('click', function(e) {
       }).catch(function(err) { toast('Delete failed: ' + err.message, 'error'); });
       break;
     case 'download':
-      window.open(FILES + '/' + id, '_blank');
+      var a = document.createElement('a');
+      a.href = FILES + '/' + id;
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       break;
   }
 });
@@ -475,22 +509,36 @@ addForm.addEventListener('submit', function(e) {
 });
 
 $('#btn-clear-completed').addEventListener('click', function() {
-  api('POST', '/clear-completed').then(function(r) {
-    Object.keys(downloads).forEach(function(id) {
-      if (downloads[id].status === 'completed') delete downloads[id];
-    });
+  var ids = Object.keys(downloads).filter(function(id) {
+    return downloads[id].status === 'completed';
+  });
+  if (ids.length === 0) return;
+  if (!confirm('Clear ' + ids.length + ' completed download' + (ids.length !== 1 ? 's' : '') + '?')) return;
+  var purgeFiles = confirm('Also delete downloaded files?');
+  (purgeFiles ? Promise.all(ids.map(function(id) {
+    return api('POST', '/purge?id=' + encodeURIComponent(id));
+  })) : api('POST', '/clear-completed')).then(function(r) {
+    ids.forEach(function(id) { delete downloads[id]; });
     render();
-    toast('Cleared ' + (r.deleted || 0) + ' completed', 'success');
+    var deleted = purgeFiles ? ids.length : (r.deleted || 0);
+    toast('Cleared ' + deleted, 'success');
   }).catch(function(err) { toast(err.message, 'error'); });
 });
 
 $('#btn-clear-failed').addEventListener('click', function() {
-  api('POST', '/clear-failed').then(function(r) {
-    Object.keys(downloads).forEach(function(id) {
-      if (downloads[id].status === 'error') delete downloads[id];
-    });
+  var ids = Object.keys(downloads).filter(function(id) {
+    return downloads[id].status === 'error';
+  });
+  if (ids.length === 0) return;
+  if (!confirm('Clear ' + ids.length + ' failed download' + (ids.length !== 1 ? 's' : '') + '?')) return;
+  var purgeFiles = confirm('Also delete downloaded files?');
+  (purgeFiles ? Promise.all(ids.map(function(id) {
+    return api('POST', '/purge?id=' + encodeURIComponent(id));
+  })) : api('POST', '/clear-failed')).then(function(r) {
+    ids.forEach(function(id) { delete downloads[id]; });
     render();
-    toast('Cleared ' + (r.deleted || 0) + ' failed', 'success');
+    var deleted = purgeFiles ? ids.length : (r.deleted || 0);
+    toast('Cleared ' + deleted, 'success');
   }).catch(function(err) { toast(err.message, 'error'); });
 });
 

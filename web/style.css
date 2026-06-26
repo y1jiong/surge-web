@@ -206,6 +206,22 @@ td {
 }
 tbody tr { border-bottom: 1px solid var(--border); }
 td:first-child { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filename-cell { cursor: pointer; }
+.filename-cell:hover { color: var(--accent); }
+.copy-url {
+  cursor: pointer;
+  display: inline-block;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 4px;
+  margin-left: 4px;
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--text-muted);
+  transition: all .15s;
+  vertical-align: middle;
+}
+.copy-url:hover { border-color: var(--accent); color: var(--accent); }
 
 .progress-cell { min-width: 140px; }
 .progress-bar {

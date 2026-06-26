@@ -31,7 +31,7 @@ func main() {
 		surgePort  int
 		surgeToken string
 	)
-	flag.IntVarP(&port, "port", "p", 8080, "listen port for the web UI")
+	flag.IntVarP(&port, "port", "p", 1799, "listen port for the web UI")
 	flag.StringVarP(&surgeHost, "surge-host", "H", "", "surge server address (default: auto-detect)")
 	flag.IntVarP(&surgePort, "surge-port", "P", 0, "surge server port (default: auto-detect)")
 	flag.StringVarP(&surgeToken, "token", "t", "", "surge API token (default: auto-detect)")
