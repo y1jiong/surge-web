@@ -24,15 +24,45 @@ import (
 //go:embed web/*
 var webFiles embed.FS
 
+var (
+	port       int
+	surgeHost  string
+	surgePort  int
+	surgeToken string
+	tlsCert    string
+	tlsKey     string
+)
+
 func main() {
-	var (
-		port       int
-		surgeHost  string
-		surgePort  int
-		surgeToken string
-		tlsCert    string
-		tlsKey     string
-	)
+	if len(os.Args) > 1 && os.Args[1] == "service" {
+		if len(os.Args) < 3 {
+			fmt.Fprintf(os.Stderr, "usage: surge-web service install [flags...]\n"+
+			"       surge-web service <uninstall|start|stop|status>\n")
+			os.Exit(1)
+		}
+		action := os.Args[2]
+		if action == "install" {
+			// Capture remaining args as service startup flags
+			setServiceArgs(os.Args[3:])
+		}
+		runServiceCommand(action)
+		return
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "run" {
+		// When started by the service manager, parse flags then run server
+		parseFlags()
+		runAsService()
+		return
+	}
+
+	parseFlags()
+
+	ctx := context.Background()
+	runServer(ctx)
+}
+
+func parseFlags() {
 	flag.IntVarP(&port, "port", "p", 1799, "listen port for the web UI")
 	flag.StringVarP(&surgeHost, "surge-host", "H", "", "surge server address (default: auto-detect)")
 	flag.IntVarP(&surgePort, "surge-port", "P", 0, "surge server port (default: auto-detect)")
@@ -41,6 +71,11 @@ func main() {
 	flag.StringVar(&tlsKey, "tls-key", "", "TLS private key file (enables HTTPS)")
 	flag.Parse()
 
+	ctx := context.Background()
+	runServer(ctx)
+}
+
+func runServer(ctx context.Context) {
 	logger := log.New(os.Stderr, "[surge-web] ", log.LstdFlags)
 
 	proxy := handler.NewProxy(logger)

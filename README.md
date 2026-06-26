@@ -33,6 +33,8 @@ It acts as a **lightweight proxy** between your browser and Surge's HTTP API, wi
 
 ---
 
+- **System service** — install as a daemon via `surge-web service install`
+
 ## Installation
 
 ### Prebuilt Binary
@@ -46,6 +48,17 @@ go install github.com/y1jiong/surge-web@latest
 ```
 
 Requires Go 1.25+.
+
+### System Service
+
+```bash
+surge-web service install                           # register with defaults
+surge-web service install --port 9090 --token abc   # pass startup flags
+surge-web service start                             # start the service
+surge-web service stop                              # stop the service
+surge-web service status                            # check running status
+surge-web service uninstall                         # remove the service
+```
 
 ---
 
