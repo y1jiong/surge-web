@@ -58,8 +58,7 @@ func main() {
 
 	parseFlags()
 
-	ctx := context.Background()
-	runServer(ctx)
+	runServer()
 }
 
 func parseFlags() {
@@ -70,12 +69,9 @@ func parseFlags() {
 	flag.StringVar(&tlsCert, "tls-cert", "", "TLS certificate file (enables HTTPS)")
 	flag.StringVar(&tlsKey, "tls-key", "", "TLS private key file (enables HTTPS)")
 	flag.Parse()
-
-	ctx := context.Background()
-	runServer(ctx)
 }
 
-func runServer(ctx context.Context) {
+func runServer() {
 	logger := log.New(os.Stderr, "[surge-web] ", log.LstdFlags)
 
 	proxy := handler.NewProxy(logger)

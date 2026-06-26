@@ -25,7 +25,7 @@ type program struct {
 }
 
 func (p *program) Start(s service.Service) error {
-	ctx, cancel := context.WithCancel(context.Background())
+	_, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 	p.exit = make(chan struct{})
 
@@ -34,7 +34,7 @@ func (p *program) Start(s service.Service) error {
 		// Replay main with the original arguments passed to the binary,
 		// minus the service runner wrapper. The service manager has
 		// already set up working directory, env, etc.
-		runServer(ctx)
+		runServer()
 	}()
 
 	return nil

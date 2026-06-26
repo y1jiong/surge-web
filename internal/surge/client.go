@@ -1,7 +1,6 @@
 package surge
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -9,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 )
 
@@ -104,24 +102,6 @@ func (c *Client) Health() error {
 	return c.healthCheck(ctx)
 }
 
-func (c *Client) List(ctx context.Context) ([]DownloadStatus, error) {
-	resp, err := c.do(ctx, http.MethodGet, "/list", nil)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("list failed: %s", resp.Status)
-	}
-
-	var statuses []DownloadStatus
-	if err := json.NewDecoder(resp.Body).Decode(&statuses); err != nil {
-		return nil, fmt.Errorf("decode list: %w", err)
-	}
-	return statuses, nil
-}
-
 func (c *Client) History(ctx context.Context) ([]DownloadEntry, error) {
 	resp, err := c.do(ctx, http.MethodGet, "/history", nil)
 	if err != nil {
@@ -138,23 +118,6 @@ func (c *Client) History(ctx context.Context) ([]DownloadEntry, error) {
 		return nil, fmt.Errorf("decode history: %w", err)
 	}
 	return entries, nil
-}
-
-func (c *Client) Add(ctx context.Context, req DownloadRequest) (string, error) {
-	resp, err := c.do(ctx, http.MethodPost, "/download", req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	var result DownloadAddResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("decode add response: %w", err)
-	}
-	if result.Status == "error" {
-		return "", fmt.Errorf("add failed: %s", result.Message)
-	}
-	return result.ID, nil
 }
 
 func (c *Client) GetStatus(ctx context.Context, id string) (*DownloadStatus, error) {
@@ -178,140 +141,7 @@ func (c *Client) GetStatus(ctx context.Context, id string) (*DownloadStatus, err
 	return &status, nil
 }
 
-func (c *Client) Pause(ctx context.Context, id string) error {
-	return c.simpleAction(ctx, "/pause", id)
-}
 
-func (c *Client) Resume(ctx context.Context, id string) error {
-	return c.simpleAction(ctx, "/resume", id)
-}
 
-func (c *Client) Delete(ctx context.Context, id string) error {
-	return c.simpleAction(ctx, "/delete", id)
-}
 
-func (c *Client) Purge(ctx context.Context, id string) error {
-	return c.simpleAction(ctx, "/purge", id)
-}
 
-func (c *Client) simpleAction(ctx context.Context, endpoint, id string) error {
-	resp, err := c.do(ctx, http.MethodPost, endpoint+"?id="+url.QueryEscape(id), nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s %s failed: %s", endpoint, id, resp.Status)
-	}
-	return nil
-}
-
-func (c *Client) ClearCompleted(ctx context.Context) (int64, error) {
-	resp, err := c.do(ctx, http.MethodPost, "/clear-completed", nil)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("clear completed failed: %s", resp.Status)
-	}
-	var result ClearResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, fmt.Errorf("decode clear response: %w", err)
-	}
-	return result.Deleted, nil
-}
-
-func (c *Client) ClearFailed(ctx context.Context) (int64, error) {
-	resp, err := c.do(ctx, http.MethodPost, "/clear-failed", nil)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("clear failed failed: %s", resp.Status)
-	}
-	var result ClearResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, fmt.Errorf("decode clear response: %w", err)
-	}
-	return result.Deleted, nil
-}
-
-func (c *Client) SetRateLimit(ctx context.Context, id string, rate int64) error {
-	path := fmt.Sprintf("/rate-limit?id=%s&rate=%d", url.QueryEscape(id), rate)
-	resp, err := c.do(ctx, http.MethodPost, path, nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("rate limit failed: %s", resp.Status)
-	}
-	return nil
-}
-
-func (c *Client) SetGlobalRateLimit(ctx context.Context, rate int64) error {
-	path := fmt.Sprintf("/rate-limit/global?rate=%d", rate)
-	resp, err := c.do(ctx, http.MethodPost, path, nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("global rate limit failed: %s", resp.Status)
-	}
-	return nil
-}
-
-func (c *Client) StreamEvents(ctx context.Context) (<-chan SSEEvent, error) {
-	req, err := c.NewSSERequest(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("create SSE request: %w", err)
-	}
-
-	resp, err := c.SSEClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("sse connect failed: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, fmt.Errorf("sse connect failed: %s", resp.Status)
-	}
-
-	ch := make(chan SSEEvent, 64)
-	go func() {
-		defer resp.Body.Close()
-		defer close(ch)
-
-		scanner := bufio.NewScanner(resp.Body)
-		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-
-		var current SSEEvent
-		for scanner.Scan() {
-			line := scanner.Text()
-			if line == "" {
-				if current.Event != "" || current.Data != "" {
-					select {
-					case ch <- current:
-					case <-ctx.Done():
-						return
-					}
-					current = SSEEvent{}
-				}
-				continue
-			}
-			if strings.HasPrefix(line, "event: ") {
-				current.Event = strings.TrimPrefix(line, "event: ")
-			} else if strings.HasPrefix(line, "data: ") {
-				current.Data = strings.TrimPrefix(line, "data: ")
-			}
-		}
-	}()
-
-	return ch, nil
-}

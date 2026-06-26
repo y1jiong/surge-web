@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -65,7 +66,7 @@ func (p *Proxy) ProxyAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body io.Reader
-	if r.Body != nil && r.Method != http.MethodGet && r.Method != http.MethodHead {
+	if r.ContentLength > 0 && r.Method != http.MethodGet && r.Method != http.MethodHead {
 		body = r.Body
 	}
 
@@ -212,6 +213,10 @@ func (p *Proxy) serveFile(w http.ResponseWriter, r *http.Request, id string) {
 
 	status, err := c.GetStatus(r.Context(), id)
 	if err != nil {
+		if !strings.Contains(err.Error(), "not found") {
+			p.writeError(w, http.StatusBadGateway, "surge request failed")
+			return
+		}
 		entries, herr := c.History(r.Context())
 		if herr != nil {
 			p.writeError(w, http.StatusNotFound, "download not found")
@@ -236,17 +241,12 @@ func (p *Proxy) streamFile(w http.ResponseWriter, r *http.Request, destPath, fil
 	}
 
 	if filename == "" {
-		cleaned := strings.TrimPrefix(destPath, "/")
-		if idx := strings.LastIndex(cleaned, "/"); idx >= 0 {
-			filename = cleaned[idx+1:]
-		} else {
-			filename = cleaned
-		}
+		filename = filepath.Base(destPath)
 	}
 
-	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+url.PathEscape(filename))
+	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+url.QueryEscape(filename))
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
 
-	http.ServeFile(w, r, destPath)
+	http.ServeFile(w, r, filepath.Clean(destPath))
 }
