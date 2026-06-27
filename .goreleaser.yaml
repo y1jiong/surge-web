@@ -1,0 +1,67 @@
+version: 2
+
+builds:
+  - id: default
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, windows, darwin]
+    goarch: [amd64, arm64]
+    goamd64: [v1]
+    binary: surge-web
+    main: .
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -buildid=
+
+  - id: amd64v3
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, windows]
+    goarch: [amd64]
+    goamd64: [v3]
+    binary: surge-web
+    main: .
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -buildid=
+
+archives:
+  - id: default
+    ids: [default]
+    formats: [tar.xz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+  - id: amd64v3
+    ids: [amd64v3]
+    formats: [tar.xz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}v3"
+    files:
+      - LICENSE
+      - README.md
+
+release:
+  footer: |
+    ---
+    [![GitHub Downloads](https://img.shields.io/github/downloads/{{ .Env.GITHUB_REPOSITORY }}/{{ .Env.GITHUB_REF_NAME }}/total)]()
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
