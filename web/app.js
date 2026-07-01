@@ -171,6 +171,10 @@ function loadList() {
           d.connections = 0;
           d.error = '';
           downloads[d.id] = d;
+        } else if (downloads[d.id].completed_at == null) {
+          // /list uses the DownloadStatus schema, which has no completed_at;
+          // backfill it from /history so completed items sort correctly.
+          downloads[d.id].completed_at = d.completed_at;
         }
       });
     }
@@ -256,6 +260,7 @@ function connectSSE() {
         downloads[d.DownloadID].progress = 100;
         downloads[d.DownloadID].speed = 0;
         downloads[d.DownloadID].eta = 0;
+        downloads[d.DownloadID].completed_at = Math.floor(Date.now() / 1000);
         render();
       }
     } catch(_) {}
@@ -333,12 +338,13 @@ function doRender() {
     var sa = downloads[a];
     var sb = downloads[b];
     var pa = (sa.status === 'downloading' || sa.status === 'queued') ? 0 :
-             sa.status === 'paused' ? 1 : 2;
+             (sa.status === 'paused' || sa.status === 'pausing' || sa.status === 'error') ? 1 : 2;
     var pb = (sb.status === 'downloading' || sb.status === 'queued') ? 0 :
-             sb.status === 'paused' ? 1 : 2;
+             (sb.status === 'paused' || sb.status === 'pausing' || sb.status === 'error') ? 1 : 2;
     if (pa !== pb) return pa - pb;
-    var ta = sa.added_at || sa.completed_at || 0;
-    var tb = sb.added_at || sb.completed_at || 0;
+    // Finished items (pa === 2) sort by completion time; active/paused items by queue time.
+    var ta = pa === 2 ? (sa.completed_at || sa.added_at || 0) : (sa.added_at || 0);
+    var tb = pb === 2 ? (sb.completed_at || sb.added_at || 0) : (sb.added_at || 0);
     return tb - ta;
   });
 
