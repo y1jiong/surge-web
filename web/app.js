@@ -412,7 +412,7 @@ function rowHTML(id, d) {
 
   return '<tr data-id="' + escId + '">' +
     '<td class="filename-cell" title="' + esc(d.filename || d.url || '') + '" data-filename="' + esc(d.filename || '') + '" data-url="' + esc(d.url || '') + '">' +
-      '<div class="filename-wrap"><span class="file-name">' + esc(d.filename || escId) + '</span> <span class="copy-url" title="Copy URL">\u2197</span></div>' +
+      '<div class="filename-wrap"><span class="file-name">' + esc(d.filename || escId) + '</span> <span class="copy-url" title="' + esc(d.url || '') + '">\u2197</span></div>' +
     '</td>' +
     '<td class="size">' + fmtBytes(d.total_size) + '</td>' +
     '<td class="progress-cell">' +
