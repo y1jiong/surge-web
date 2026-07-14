@@ -202,17 +202,17 @@ function connectSSE() {
   src.addEventListener('progress', function(e) {
     try {
       var d = JSON.parse(e.data);
-      if (d.DownloadID && downloads[d.DownloadID]) {
-        downloads[d.DownloadID].downloaded = d.Downloaded;
-        downloads[d.DownloadID].total_size = d.Total;
-        downloads[d.DownloadID].speed = d.Speed;
-        downloads[d.DownloadID].eta = d.Downloaded > 0 && d.Speed > 0
-          ? Math.round((d.Total - d.Downloaded) / d.Speed) : 0;
-        downloads[d.DownloadID].progress = d.Total > 0
-          ? (d.Downloaded / d.Total * 100) : 0;
-        downloads[d.DownloadID].connections = d.ActiveConnections;
-        if (downloads[d.DownloadID].status === 'queued') {
-          downloads[d.DownloadID].status = 'downloading';
+      if (d.download_id && downloads[d.download_id]) {
+        downloads[d.download_id].downloaded = d.downloaded;
+        downloads[d.download_id].total_size = d.total;
+        downloads[d.download_id].speed = d.speed;
+        downloads[d.download_id].eta = d.downloaded > 0 && d.speed > 0
+          ? Math.round((d.total - d.downloaded) / d.speed) : 0;
+        downloads[d.download_id].progress = d.total > 0
+          ? (d.downloaded / d.total * 100) : 0;
+        downloads[d.download_id].connections = d.connections;
+        if (downloads[d.download_id].status === 'queued') {
+          downloads[d.download_id].status = 'downloading';
         }
         render();
       }
@@ -222,11 +222,11 @@ function connectSSE() {
   src.addEventListener('queued', function(e) {
     try {
       var d = JSON.parse(e.data);
-      downloads[d.DownloadID] = {
-        id: d.DownloadID,
-        url: d.URL,
-        filename: d.Filename,
-        dest_path: d.DestPath,
+      downloads[d.download_id] = {
+        id: d.download_id,
+        url: d.url,
+        filename: d.filename,
+        dest_path: d.dest_path,
         total_size: 0,
         downloaded: 0,
         progress: 0,
@@ -243,10 +243,10 @@ function connectSSE() {
   src.addEventListener('started', function(e) {
     try {
       var d = JSON.parse(e.data);
-      if (downloads[d.DownloadID]) {
-        downloads[d.DownloadID].status = 'downloading';
-        downloads[d.DownloadID].total_size = d.Total;
-        downloads[d.DownloadID].filename = d.Filename || downloads[d.DownloadID].filename;
+      if (downloads[d.download_id]) {
+        downloads[d.download_id].status = 'downloading';
+        downloads[d.download_id].total_size = d.total;
+        downloads[d.download_id].filename = d.filename || downloads[d.download_id].filename;
         render();
       }
     } catch(_) {}
@@ -255,12 +255,12 @@ function connectSSE() {
   src.addEventListener('complete', function(e) {
     try {
       var d = JSON.parse(e.data);
-      if (downloads[d.DownloadID]) {
-        downloads[d.DownloadID].status = 'completed';
-        downloads[d.DownloadID].progress = 100;
-        downloads[d.DownloadID].speed = 0;
-        downloads[d.DownloadID].eta = 0;
-        downloads[d.DownloadID].completed_at = Math.floor(Date.now() / 1000);
+      if (downloads[d.download_id]) {
+        downloads[d.download_id].status = 'completed';
+        downloads[d.download_id].progress = 100;
+        downloads[d.download_id].speed = 0;
+        downloads[d.download_id].eta = 0;
+        downloads[d.download_id].completed_at = Math.floor(Date.now() / 1000);
         render();
       }
     } catch(_) {}
@@ -269,9 +269,9 @@ function connectSSE() {
   src.addEventListener('error', function(e) {
     try {
       var d = JSON.parse(e.data);
-      if (d.DownloadID && downloads[d.DownloadID]) {
-        downloads[d.DownloadID].status = 'error';
-        downloads[d.DownloadID].error = d.Err || 'Unknown error';
+      if (d.download_id && downloads[d.download_id]) {
+        downloads[d.download_id].status = 'error';
+        downloads[d.download_id].error = d.error || 'Unknown error';
         render();
       }
     } catch(_) {}
@@ -280,10 +280,10 @@ function connectSSE() {
   src.addEventListener('paused', function(e) {
     try {
       var d = JSON.parse(e.data);
-      if (d.DownloadID && downloads[d.DownloadID]) {
-        downloads[d.DownloadID].status = 'paused';
-        downloads[d.DownloadID].speed = 0;
-        downloads[d.DownloadID].eta = -1;
+      if (d.download_id && downloads[d.download_id]) {
+        downloads[d.download_id].status = 'paused';
+        downloads[d.download_id].speed = 0;
+        downloads[d.download_id].eta = -1;
         render();
       }
     } catch(_) {}
@@ -292,8 +292,8 @@ function connectSSE() {
   src.addEventListener('resumed', function(e) {
     try {
       var d = JSON.parse(e.data);
-      if (d.DownloadID && downloads[d.DownloadID]) {
-        downloads[d.DownloadID].status = 'downloading';
+      if (d.download_id && downloads[d.download_id]) {
+        downloads[d.download_id].status = 'downloading';
         render();
       }
     } catch(_) {}
@@ -302,7 +302,7 @@ function connectSSE() {
   src.addEventListener('removed', function(e) {
     try {
       var d = JSON.parse(e.data);
-      delete downloads[d.DownloadID];
+      delete downloads[d.download_id];
       render();
     } catch(_) {}
   });
