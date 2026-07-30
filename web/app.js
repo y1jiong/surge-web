@@ -527,7 +527,10 @@ addForm.addEventListener('submit', function(e) {
   var url = addUrl.value.trim();
   if (!url) return;
 
-  var body = { url: url };
+  // skip_approval mirrors the official Surge remote client: the web UI has no
+  // TUI to approve prompts, so ask the daemon to enqueue directly. Without it
+  // the daemon may answer 202 pending_approval (never queued) or 409 on dupes.
+  var body = { url: url, skip_approval: true };
   var fn = addFilename.value.trim();
   if (fn) body.filename = fn;
 
@@ -540,10 +543,14 @@ addForm.addEventListener('submit', function(e) {
   btn.disabled = true;
   btn.textContent = 'Adding...';
 
-  api('POST', '/download', body).then(function() {
+  api('POST', '/download', body).then(function(resp) {
     addUrl.value = '';
     addFilename.value = '';
-    toast('Download queued', 'success');
+    if (resp && resp.status === 'pending_approval') {
+      toast('Sent to Surge for approval', 'success');
+    } else {
+      toast('Download queued', 'success');
+    }
   }).catch(function(err) {
     toast(err.message, 'error');
   }).finally(function() {
