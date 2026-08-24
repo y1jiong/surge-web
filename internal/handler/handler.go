@@ -6,7 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
-	"encoding/json"
+	"encoding/json/v2"
 	"io"
 	"log"
 	"net/http"
@@ -163,7 +163,7 @@ func (p *Proxy) writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	_ = json.MarshalWrite(w, data)
 }
 
 func (p *Proxy) writeError(w http.ResponseWriter, status int, message string) {

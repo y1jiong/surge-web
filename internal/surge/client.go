@@ -3,7 +3,7 @@ package surge
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -114,7 +114,7 @@ func (c *Client) History(ctx context.Context) ([]DownloadEntry, error) {
 	}
 
 	var entries []DownloadEntry
-	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &entries); err != nil {
 		return nil, fmt.Errorf("decode history: %w", err)
 	}
 	return entries, nil
@@ -135,7 +135,7 @@ func (c *Client) GetStatus(ctx context.Context, id string) (*DownloadStatus, err
 	}
 
 	var status DownloadStatus
-	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &status); err != nil {
 		return nil, fmt.Errorf("decode status: %w", err)
 	}
 	return &status, nil
