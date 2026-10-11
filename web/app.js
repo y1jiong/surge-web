@@ -401,6 +401,7 @@ function rowHTML(id, d) {
   }
   if (d.status === 'completed') {
     actions += '<button class="download-btn" data-action="download" data-id="' + escId + '">Download</button>';
+    actions += '<button class="hash-btn" data-action="hash" data-id="' + escId + '">Hash</button>';
     actions += '<button class="encrypt-btn" data-action="encrypt" data-id="' + escId + '">Encrypt</button>';
   }
   if (d.status === 'completed' || d.status === 'error' || d.status === 'paused') {
@@ -481,6 +482,9 @@ tbody.addEventListener('click', function(e) {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      break;
+    case 'hash':
+      showHashes(id);
       break;
     case 'encrypt':
       var pw = prompt('Enter encryption password:');
@@ -633,7 +637,7 @@ decryptClose.addEventListener('click', function() {
   decryptModal.style.display = 'none';
 });
 
-document.querySelector('.modal-overlay').addEventListener('click', function() {
+decryptModal.querySelector('.modal-overlay').addEventListener('click', function() {
   decryptModal.style.display = 'none';
 });
 
@@ -800,6 +804,66 @@ decryptBtn.addEventListener('click', function() {
     decryptBtn.disabled = false;
     decryptBtn.textContent = 'Decrypt & Download';
   });
+});
+
+var hashModal = $('#hash-modal');
+var hashClose = $('#hash-close');
+var hashHint = $('#hash-hint');
+var hashRows = $('#hash-rows');
+var hashAbort = null;
+
+function closeHashModal() {
+  hashModal.style.display = 'none';
+  // Cancel the in-flight request so the backend stops reading the file.
+  if (hashAbort) { hashAbort.abort(); hashAbort = null; }
+}
+
+function showHashes(id) {
+  closeHashModal();
+  hashModal.style.display = '';
+  hashRows.innerHTML = '';
+  hashHint.style.display = '';
+  hashHint.textContent = 'Computing MD5 and SHA-256\u2026';
+
+  var controller = new AbortController();
+  hashAbort = controller;
+
+  fetch(FILES + '/' + encodeURIComponent(id) + '/hash', {signal: controller.signal})
+    .then(function(r) {
+      return r.text().then(function(t) {
+        var data;
+        try { data = JSON.parse(t); } catch (_) {}
+        if (!r.ok) throw new Error((data && data.message) || t || r.statusText);
+        return data || {};
+      });
+    })
+    .then(function(data) {
+      if (hashAbort !== controller) return;
+      hashHint.textContent = (data.filename || id) + ' \u00b7 ' + fmtBytes(data.size);
+      hashRows.innerHTML = ['md5', 'sha256'].filter(function(algo) {
+        return data[algo];
+      }).map(function(algo) {
+        return '<div class="hash-row">' +
+          '<div class="hash-label">' + algo.toUpperCase() + '</div>' +
+          '<div class="hash-value">' + esc(data[algo]) + '</div>' +
+          '<button class="hash-copy" data-hash="' + esc(data[algo]) + '" data-algo="' + algo + '">Copy</button>' +
+        '</div>';
+      }).join('');
+    })
+    .catch(function(err) {
+      if (err.name === 'AbortError') return;
+      hashHint.textContent = 'Failed: ' + err.message;
+    });
+}
+
+hashClose.addEventListener('click', closeHashModal);
+
+hashModal.querySelector('.modal-overlay').addEventListener('click', closeHashModal);
+
+hashRows.addEventListener('click', function(e) {
+  var btn = e.target.closest('.hash-copy');
+  if (!btn) return;
+  copyToClipboard(btn.dataset.hash, btn.dataset.algo.toUpperCase());
 });
 
 })();

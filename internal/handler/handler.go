@@ -1,12 +1,16 @@
 package handler
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json/v2"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -19,14 +23,23 @@ import (
 	"surge-web/internal/surge"
 )
 
+// maxConcurrentHashes caps how many downloads are hashed at the same time.
+// Hashing reads a whole file, so a handful of large downloads could otherwise
+// saturate the disk.
+const maxConcurrentHashes = 2
+
 type Proxy struct {
-	mu     sync.RWMutex
-	client *surge.Client
-	Logger *log.Logger
+	mu      sync.RWMutex
+	client  *surge.Client
+	Logger  *log.Logger
+	hashSem chan struct{}
 }
 
 func NewProxy(logger *log.Logger) *Proxy {
-	return &Proxy{Logger: logger}
+	return &Proxy{
+		Logger:  logger,
+		hashSem: make(chan struct{}, maxConcurrentHashes),
+	}
 }
 
 func (p *Proxy) SetClient(c *surge.Client) {
@@ -184,9 +197,15 @@ func (p *Proxy) ServeMux() *http.ServeMux {
 			return
 		}
 		id := parts[0]
-		if len(parts) > 1 && parts[1] == "encrypt" {
-			p.serveEncryptedFile(w, r, id)
-			return
+		if len(parts) > 1 {
+			switch parts[1] {
+			case "encrypt":
+				p.serveEncryptedFile(w, r, id)
+				return
+			case "hash":
+				p.hashFile(w, r, id)
+				return
+			}
 		}
 		p.serveFile(w, r, id)
 	})
@@ -194,34 +213,49 @@ func (p *Proxy) ServeMux() *http.ServeMux {
 	return mux
 }
 
-func (p *Proxy) serveFile(w http.ResponseWriter, r *http.Request, id string) {
+// fileRef is a download's on-disk location and status, resolved from its id.
+type fileRef struct {
+	DestPath string
+	Filename string
+	Status   string
+}
+
+// resolveFileRef maps a download id to its fileRef. It asks the status endpoint
+// first and, when the daemon reports the id as not found, retries against
+// history so entries listed only there stay reachable. The returned int is the
+// HTTP status to report when err is non-nil.
+func (p *Proxy) resolveFileRef(ctx context.Context, id string) (*fileRef, int, error) {
 	c := p.GetClient()
 	if c == nil || c.BaseURL == "" {
-		p.writeError(w, http.StatusServiceUnavailable, "surge not connected")
-		return
+		return nil, http.StatusServiceUnavailable, errors.New("surge not connected")
 	}
 
-	status, err := c.GetStatus(r.Context(), id)
+	status, err := c.GetStatus(ctx, id)
 	if err != nil {
 		if !strings.Contains(err.Error(), "not found") {
-			p.writeError(w, http.StatusBadGateway, "surge request failed")
-			return
+			return nil, http.StatusBadGateway, errors.New("surge request failed")
 		}
-		entries, herr := c.History(r.Context())
+		entries, herr := c.History(ctx)
 		if herr != nil {
-			p.writeError(w, http.StatusNotFound, "download not found")
-			return
+			return nil, http.StatusNotFound, errors.New("download not found")
 		}
 		for _, e := range entries {
 			if e.ID == id {
-				p.streamFile(w, r, e.DestPath, e.Filename)
-				return
+				return &fileRef{DestPath: e.DestPath, Filename: e.Filename, Status: e.Status}, 0, nil
 			}
 		}
-		p.writeError(w, http.StatusNotFound, "download not found")
+		return nil, http.StatusNotFound, errors.New("download not found")
+	}
+	return &fileRef{DestPath: status.DestPath, Filename: status.Filename, Status: status.Status}, 0, nil
+}
+
+func (p *Proxy) serveFile(w http.ResponseWriter, r *http.Request, id string) {
+	ref, code, err := p.resolveFileRef(r.Context(), id)
+	if err != nil {
+		p.writeError(w, code, err.Error())
 		return
 	}
-	p.streamFile(w, r, status.DestPath, status.Filename)
+	p.streamFile(w, r, ref.DestPath, ref.Filename)
 }
 
 func (p *Proxy) streamFile(w http.ResponseWriter, r *http.Request, destPath, filename string) {
@@ -242,9 +276,9 @@ func (p *Proxy) streamFile(w http.ResponseWriter, r *http.Request, destPath, fil
 }
 
 func (p *Proxy) serveEncryptedFile(w http.ResponseWriter, r *http.Request, id string) {
-	c := p.GetClient()
-	if c == nil || c.BaseURL == "" {
-		p.writeError(w, http.StatusServiceUnavailable, "surge not connected")
+	ref, code, err := p.resolveFileRef(r.Context(), id)
+	if err != nil {
+		p.writeError(w, code, err.Error())
 		return
 	}
 
@@ -254,27 +288,83 @@ func (p *Proxy) serveEncryptedFile(w http.ResponseWriter, r *http.Request, id st
 		return
 	}
 
-	status, err := c.GetStatus(r.Context(), id)
+	p.encryptAndStream(w, r, ref.DestPath, ref.Filename, password)
+}
+
+// contextReader fails reads once ctx is done, so a long file copy stops at the
+// next chunk instead of running to completion.
+type contextReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (c contextReader) Read(p []byte) (int, error) {
+	if err := c.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return c.r.Read(p)
+}
+
+// hashFile reads the file behind a completed download and reports its MD5 and
+// SHA-256 digests. Both are computed in a single pass over the file, and the
+// copy stops if the request is canceled.
+func (p *Proxy) hashFile(w http.ResponseWriter, r *http.Request, id string) {
+	ref, code, err := p.resolveFileRef(r.Context(), id)
 	if err != nil {
-		if !strings.Contains(err.Error(), "not found") {
-			p.writeError(w, http.StatusBadGateway, "surge request failed")
-			return
-		}
-		entries, herr := c.History(r.Context())
-		if herr != nil {
-			p.writeError(w, http.StatusNotFound, "download not found")
-			return
-		}
-		for _, e := range entries {
-			if e.ID == id {
-				p.encryptAndStream(w, r, e.DestPath, e.Filename, password)
-				return
-			}
-		}
-		p.writeError(w, http.StatusNotFound, "download not found")
+		p.writeError(w, code, err.Error())
 		return
 	}
-	p.encryptAndStream(w, r, status.DestPath, status.Filename, password)
+
+	if ref.Status != "completed" {
+		p.writeError(w, http.StatusConflict, "only completed downloads can be hashed")
+		return
+	}
+	if ref.DestPath == "" {
+		p.writeError(w, http.StatusNotFound, "file path not available")
+		return
+	}
+
+	select {
+	case p.hashSem <- struct{}{}:
+		defer func() { <-p.hashSem }()
+	case <-r.Context().Done():
+		// The request was canceled while waiting for a free slot.
+		return
+	}
+
+	f, err := os.Open(filepath.Clean(ref.DestPath))
+	if err != nil {
+		p.writeError(w, http.StatusNotFound, "file not found on disk")
+		return
+	}
+	defer f.Close()
+
+	md5Sum := md5.New()
+	sha256Sum := sha256.New()
+
+	src := contextReader{ctx: r.Context(), r: f}
+	size, err := io.Copy(io.MultiWriter(md5Sum, sha256Sum), src)
+	if err != nil {
+		if r.Context().Err() != nil {
+			return
+		}
+		p.Logger.Printf("hash %s: read %s: %v", id, ref.DestPath, err)
+		p.writeError(w, http.StatusInternalServerError, "failed to read file")
+		return
+	}
+
+	filename := ref.Filename
+	if filename == "" {
+		filename = filepath.Base(ref.DestPath)
+	}
+
+	p.writeJSON(w, http.StatusOK, map[string]any{
+		"id":       id,
+		"filename": filename,
+		"size":     size,
+		"md5":      hex.EncodeToString(md5Sum.Sum(nil)),
+		"sha256":   hex.EncodeToString(sha256Sum.Sum(nil)),
+	})
 }
 
 func (p *Proxy) encryptAndStream(w http.ResponseWriter, r *http.Request, destPath, filename, password string) {

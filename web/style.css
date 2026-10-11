@@ -292,6 +292,10 @@ tbody tr { border-bottom: 1px solid var(--border); }
   border-color: var(--yellow);
   color: var(--yellow);
 }
+.actions button.hash-btn:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
 
 .toast {
   position: fixed;
@@ -313,7 +317,8 @@ tbody tr { border-bottom: 1px solid var(--border); }
   to   { transform: translateY(0); opacity: 1; }
 }
 
-#decrypt-modal {
+#decrypt-modal,
+#hash-modal {
   position: fixed;
   inset: 0;
   z-index: 200;
@@ -428,3 +433,46 @@ tbody tr { border-bottom: 1px solid var(--border); }
   transition: border-color .2s;
 }
 #btn-decrypt-tool:hover { border-color: var(--accent); }
+
+#hash-modal .modal-box { width: 560px; }
+#hash-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.hash-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hash-label {
+  flex: 0 0 56px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.hash-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.hash-copy {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  background: var(--surface);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color .2s;
+}
+.hash-copy:hover { border-color: var(--accent); }

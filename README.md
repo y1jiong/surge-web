@@ -7,7 +7,7 @@
 [![Go Version](https://img.shields.io/github/go-mod/go-version/y1jiong/surge-web?style=flat-square&color=cyan)](go.mod)
 [![License](https://img.shields.io/badge/License-Apache%202.0-grey.svg?style=flat-square)](LICENSE)
 
-[Installation](#installation) • [Usage](#usage) • [Docker Compose](#docker-compose) • [Encrypted Download](#encrypted-download) • [Building](#building)
+[Installation](#installation) • [Usage](#usage) • [Docker Compose](#docker-compose) • [Encrypted Download](#encrypted-download) • [File Hashes](#file-hashes) • [Building](#building)
 
 </div>
 
@@ -27,6 +27,7 @@ It acts as a **lightweight proxy** between your browser and Surge's HTTP API, wi
 - **Real-time progress** — SSE streaming for live download speed, ETA, and progress bars
 - **Custom headers** — supply cookies, auth tokens, or referrers for protected download URLs
 - **File management** — delete downloads with optional file removal, serve completed files via browser
+- **File hashes** — compute MD5 and SHA-256 for completed downloads on demand, copy from the UI
 - **Global rate limit** — set bandwidth limits directly from the web UI
 - **Single binary** — frontend embedded with Go's `embed`, no external assets needed
 - **Encrypted download** — encrypt completed files with a password before downloading, decrypt locally in-browser
@@ -158,6 +159,26 @@ Surge Web supports **password-protected encrypted downloads** to keep file conte
 Decryption runs entirely in your browser via the Web Crypto API. No data leaves your device, and no additional tools are required.
 
 > **Note:** The encrypted format (`SENC` v0x02) is specific to Surge Web. Files are encrypted using AES-256-CTR. Keys are derived from the password using SHA-256 with domain separation. The original filename is preserved inside the encrypted container.
+
+---
+
+## File Hashes
+
+Once a download has completed, click the **Hash** button beside it to compute the file's **MD5** and **SHA-256** digests, then copy either value from the dialog.
+
+Both digests are produced in a single pass over the file, which is read from local disk by the Surge Web process — so this requires Surge Web to run on the same machine as the downloaded file, just like the **Download** and **Encrypt** buttons. Only completed downloads can be hashed; in-progress items return `409`.
+
+`GET /file/{id}/hash` returns:
+
+```json
+{
+  "id": "…",
+  "filename": "example.iso",
+  "size": 1234567,
+  "md5": "…",
+  "sha256": "…"
+}
+```
 
 ---
 

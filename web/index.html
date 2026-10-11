@@ -78,6 +78,21 @@
   </div>
 </div>
 
+<div id="hash-modal" style="display:none">
+  <div class="modal-overlay"></div>
+  <div class="modal-box">
+    <div class="modal-header">
+      <span>File Hashes</span>
+      <button id="hash-close" class="modal-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-hint" id="hash-hint">Computing…</p>
+      <div id="hash-rows"></div>
+      <p class="modal-hint">Computed from the file on this machine's disk.</p>
+    </div>
+  </div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>
