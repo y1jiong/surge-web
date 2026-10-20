@@ -280,9 +280,13 @@ tbody tr { border-bottom: 1px solid var(--border); }
   border-color: var(--accent);
   color: var(--accent);
 }
-.actions button.danger:hover {
-  border-color: var(--red);
+.actions button.danger {
   color: var(--red);
+}
+.actions button.danger:hover {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
 }
 .actions button.download-btn:hover {
   border-color: var(--green);
@@ -296,6 +300,42 @@ tbody tr { border-bottom: 1px solid var(--border); }
   border-color: var(--green);
   color: var(--green);
 }
+.more-wrap {
+  position: relative;
+  display: inline-block;
+}
+.more-wrap.open .more-btn {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.more-btn .caret {
+  font-size: 9px;
+  opacity: .8;
+}
+.more-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  min-width: 112px;
+  padding: 4px;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,.45);
+}
+.more-wrap.open .more-menu { display: flex; }
+.more-menu button {
+  width: 100%;
+  padding: 6px 10px;
+  text-align: left;
+  background: transparent;
+  border-color: transparent;
+}
+.more-menu button:hover { background: rgba(88,166,255,.1); }
 
 .toast {
   position: fixed;

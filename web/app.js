@@ -373,6 +373,21 @@ function doRender() {
   }
 }
 
+function actionButtonHTML(action, label, escId, cls, role) {
+  return '<button type="button"' +
+    (cls ? ' class="' + cls + '"' : '') +
+    (role ? ' role="' + role + '"' : '') +
+    ' data-action="' + action + '" data-id="' + escId + '">' + label + '</button>';
+}
+
+function closeMoreMenus() {
+  $$('.more-wrap.open').forEach(function(wrap) {
+    wrap.classList.remove('open');
+    var btn = wrap.querySelector('.more-btn');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  });
+}
+
 function rowHTML(id, d) {
   var progress = d.progress || 0;
   var progCls = d.status === 'completed' ? 'completed' :
@@ -392,23 +407,30 @@ function rowHTML(id, d) {
                 d.eta > 0 ? fmtETA(d.eta) : '—';
 
   var actions = '';
+  var moreItems = '';
   var escId = esc(id);
+
   if (d.status === 'downloading') {
-    actions += '<button data-action="pause" data-id="' + escId + '">Pause</button>';
+    actions += actionButtonHTML('pause', 'Pause', escId);
+    actions += actionButtonHTML('delete', 'Cancel', escId, 'danger');
+  } else if (d.status === 'paused' || d.status === 'error') {
+    actions += actionButtonHTML('resume', 'Resume', escId);
+    actions += actionButtonHTML('delete', 'Delete', escId, 'danger');
+  } else if (d.status === 'completed') {
+    // Keep the primary Download action visible; tuck secondary actions into More.
+    actions += actionButtonHTML('download', 'Download', escId, 'download-btn');
+    moreItems += actionButtonHTML('hash', 'Hash', escId, 'hash-btn', 'menuitem');
+    moreItems += actionButtonHTML('encrypt', 'Encrypt', escId, 'encrypt-btn', 'menuitem');
+    moreItems += actionButtonHTML('delete', 'Delete', escId, 'danger', 'menuitem');
+  } else if (d.status === 'queued') {
+    actions += actionButtonHTML('delete', 'Cancel', escId, 'danger');
   }
-  if (d.status === 'paused' || d.status === 'error') {
-    actions += '<button data-action="resume" data-id="' + escId + '">Resume</button>';
-  }
-  if (d.status === 'completed') {
-    actions += '<button class="download-btn" data-action="download" data-id="' + escId + '">Download</button>';
-    actions += '<button class="hash-btn" data-action="hash" data-id="' + escId + '">Hash</button>';
-    actions += '<button class="encrypt-btn" data-action="encrypt" data-id="' + escId + '">Encrypt</button>';
-  }
-  if (d.status === 'completed' || d.status === 'error' || d.status === 'paused') {
-    actions += '<button class="danger" data-action="delete" data-id="' + escId + '">Delete</button>';
-  }
-  if (d.status === 'downloading' || d.status === 'queued') {
-    actions += '<button class="danger" data-action="delete" data-id="' + escId + '">Cancel</button>';
+
+  if (moreItems) {
+    actions += '<div class="more-wrap">' +
+      '<button type="button" class="more-btn" aria-haspopup="true" aria-expanded="false">More <span class="caret">\u25be</span></button>' +
+      '<div class="more-menu" role="menu">' + moreItems + '</div>' +
+    '</div>';
   }
 
   return '<tr data-id="' + escId + '">' +
@@ -445,8 +467,21 @@ tbody.addEventListener('click', function(e) {
     return;
   }
 
+  var moreBtn = e.target.closest('.more-btn');
+  if (moreBtn) {
+    var wrap = moreBtn.closest('.more-wrap');
+    var wasOpen = wrap.classList.contains('open');
+    closeMoreMenus();
+    if (!wasOpen) {
+      wrap.classList.add('open');
+      moreBtn.setAttribute('aria-expanded', 'true');
+    }
+    return;
+  }
+
   var btn = e.target.closest('button[data-action]');
   if (!btn) return;
+  if (btn.closest('.more-menu')) closeMoreMenus();
   var action = btn.dataset.action;
   var id = btn.dataset.id;
 
@@ -498,6 +533,14 @@ tbody.addEventListener('click', function(e) {
       document.body.removeChild(ea);
       break;
   }
+});
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.more-wrap')) closeMoreMenus();
+});
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeMoreMenus();
 });
 
 function parseHeaders(text) {
