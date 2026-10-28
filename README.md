@@ -52,7 +52,7 @@ Requires Go 1.27+.
 ### Docker Compose
 
 ```bash
-curl -O https://raw.githubusercontent.com/y1jiong/surge-web/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/y1jiong/surge-web/main/compose.yaml
 docker compose up -d
 ```
 
@@ -60,7 +60,7 @@ Starts both Surge (headless server) and Surge Web. Downloads land in `./download
 
 #### HTTPS via built-in TLS
 
-Put your certificate and key in a `./certs` directory, then add to `docker-compose.yml`:
+Put your certificate and key in a `./certs` directory, then add to `compose.yaml`:
 
 ```yaml
 # surge-web service
