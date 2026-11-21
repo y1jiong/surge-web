@@ -1,15 +1,51 @@
 :root {
+  color-scheme: dark;
+
   --bg: #0d1117;
   --surface: #161b22;
+  --inset: #0d1117;
   --border: #30363d;
   --text: #c9d1d9;
   --text-muted: #8b949e;
   --accent: #58a6ff;
   --accent-hover: #79c0ff;
+  --accent-soft: rgba(88, 166, 255, .1);
   --green: #3fb950;
+  --green-soft: rgba(63, 185, 80, .05);
   --red: #f85149;
+  --red-soft: rgba(248, 81, 73, .1);
   --yellow: #d2991d;
+  --overlay: rgba(0, 0, 0, .6);
+  --shadow-menu: 0 8px 24px rgba(0, 0, 0, .45);
+  --shadow-toast: 0 4px 12px rgba(0, 0, 0, .3);
+  --shadow-modal: 0 8px 32px rgba(0, 0, 0, .4);
   --radius: 6px;
+}
+
+/* Follow the OS color scheme: light theme when the system prefers light. */
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+
+    --bg: #ffffff;
+    --surface: #f6f8fa;
+    --inset: #eff2f5;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --text-muted: #59636e;
+    --accent: #0969da;
+    --accent-hover: #0550ae;
+    --accent-soft: rgba(9, 105, 218, .08);
+    --green: #1a7f37;
+    --green-soft: rgba(26, 127, 55, .08);
+    --red: #cf222e;
+    --red-soft: rgba(207, 34, 46, .08);
+    --yellow: #9a6700;
+    --overlay: rgba(31, 35, 40, .45);
+    --shadow-menu: 0 8px 24px rgba(31, 35, 40, .15);
+    --shadow-toast: 0 4px 12px rgba(31, 35, 40, .15);
+    --shadow-modal: 0 8px 32px rgba(31, 35, 40, .2);
+  }
 }
 
 * {
@@ -325,7 +361,7 @@ tbody tr { border-bottom: 1px solid var(--border); }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  box-shadow: var(--shadow-menu);
 }
 .more-wrap.open .more-menu { display: flex; }
 .more-menu button {
@@ -335,7 +371,7 @@ tbody tr { border-bottom: 1px solid var(--border); }
   background: transparent;
   border-color: transparent;
 }
-.more-menu button:hover { background: rgba(88,166,255,.1); }
+.more-menu button:hover { background: var(--accent-soft); }
 
 .toast {
   position: fixed;
@@ -346,7 +382,7 @@ tbody tr { border-bottom: 1px solid var(--border); }
   border-radius: var(--radius);
   padding: 12px 20px;
   font-size: 13px;
-  box-shadow: 0 4px 12px rgba(0,0,0,.3);
+  box-shadow: var(--shadow-toast);
   z-index: 100;
   animation: slideIn .2s ease-out;
 }
@@ -369,7 +405,7 @@ tbody tr { border-bottom: 1px solid var(--border); }
 .modal-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0,0,0,.6);
+  background: var(--overlay);
 }
 .modal-box {
   position: relative;
@@ -378,7 +414,7 @@ tbody tr { border-bottom: 1px solid var(--border); }
   border-radius: 8px;
   width: 400px;
   max-width: 90vw;
-  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  box-shadow: var(--shadow-modal);
 }
 .modal-header {
   display: flex;
@@ -411,7 +447,7 @@ tbody tr { border-bottom: 1px solid var(--border); }
   margin: 0;
 }
 .modal-hint code {
-  background: var(--bg);
+  background: var(--inset);
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 12px;
@@ -425,7 +461,7 @@ tbody tr { border-bottom: 1px solid var(--border); }
   transition: border-color .2s;
 }
 #decrypt-dropzone:hover { border-color: var(--accent); }
-#decrypt-dropzone.dragover { border-color: var(--green); background: rgba(63,185,80,.05); }
+#decrypt-dropzone.dragover { border-color: var(--green); background: var(--green-soft); }
 #decrypt-drop-text {
   color: var(--text-muted);
   font-size: 13px;
@@ -434,7 +470,7 @@ tbody tr { border-bottom: 1px solid var(--border); }
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--bg);
+  background: var(--inset);
   color: var(--text);
   font-size: 14px;
   outline: none;
@@ -457,7 +493,7 @@ tbody tr { border-bottom: 1px solid var(--border); }
   font-size: 13px;
   color: var(--red);
   padding: 8px 12px;
-  background: rgba(248,81,73,.1);
+  background: var(--red-soft);
   border: 1px solid var(--red);
   border-radius: var(--radius);
 }
@@ -497,7 +533,7 @@ tbody tr { border-bottom: 1px solid var(--border); }
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   color: var(--text);
-  background: var(--bg);
+  background: var(--inset);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px 10px;

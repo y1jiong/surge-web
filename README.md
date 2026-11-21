@@ -31,7 +31,7 @@ It acts as a **lightweight proxy** between your browser and Surge's HTTP API, wi
 - **Global rate limit** — set bandwidth limits directly from the web UI
 - **Single binary** — frontend embedded with Go's `embed`, no external assets needed
 - **Encrypted download** — encrypt completed files with a password before downloading, decrypt locally in-browser
-- **Dark theme** — GitHub-style color scheme, clean and minimal
+- **Light & dark themes** — GitHub-style color scheme that follows the system preference
 - **System service** — install as a daemon via `surge-web service install`
 - **Docker Compose** — one-command deployment with Surge and Surge Web
 
