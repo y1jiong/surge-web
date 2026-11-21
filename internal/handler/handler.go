@@ -57,7 +57,7 @@ func (p *Proxy) GetClient() *surge.Client {
 func (p *Proxy) HandleStatus(w http.ResponseWriter, r *http.Request) {
 	c := p.GetClient()
 	connected := c != nil && c.BaseURL != ""
-	p.writeJSON(w, http.StatusOK, map[string]interface{}{
+	p.writeJSON(w, http.StatusOK, map[string]any{
 		"connected": connected,
 	})
 }
